@@ -1,8 +1,11 @@
 {
   "JELLYFIN_URL": "http://localhost:8096",
-  "API_KEY": "YOUR_API_KEY_HERE",
+  "API_KEY": "YOUR_API_KEY",
   "RECOMMENDATION_COUNT": 50,
   "MAX_THREADS": 2,
   "OS_TYPE": "YOUR_OS_HERE",
-  "BIAS_STRENGTH": 2.0
+  "BIAS_STRENGTH": 2.0,
+  
+  "DAEMON_MODE": false,
+  "RUN_TIME": "04:00"
 }

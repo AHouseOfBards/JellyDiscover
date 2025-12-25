@@ -5,7 +5,8 @@ import subprocess
 import requests
 import sqlite3
 import collections
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import concurrent.futures
@@ -113,7 +114,8 @@ def get_library_mapping():
         all_libs = response.json()
     except Exception as e:
         print(f"[!] Connection Failed: {e}")
-        sys.exit(1)
+        # In Daemon mode, we don't exit, we just wait and retry later
+        return None 
     
     active_map = {}
     for cat, settings in LIBS['CATEGORIES'].items():
@@ -216,8 +218,13 @@ def process_user(user, lib_map, index):
 
 def apply_strict_privacy():
     print("\n[*] Applying Privacy Shield...")
-    users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
-    libs = session.get(f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders", timeout=TIMEOUT).json()
+    try:
+        users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
+        libs = session.get(f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders", timeout=TIMEOUT).json()
+    except:
+        print("[!] Connection lost during Privacy Shield application.")
+        return
+
     public_ids = []
     user_private_map = {u['Id']: [] for u in users}
     discovery_root_name = os.path.basename(DATA_ROOT) 
@@ -253,25 +260,62 @@ def apply_strict_privacy():
         session.post(f"{CONFIG['JELLYFIN_URL']}/Users/{u_id}/Policy", json=policy, timeout=TIMEOUT)
         print(f"    [SECURE] {u_name}", flush=True)
 
-def main():
+def run_task():
+    print(f"\n--- Starting Job: {datetime.now()} ---")
     if not os.path.exists(DATA_ROOT): os.makedirs(DATA_ROOT)
     init_db() 
+    
     lib_map = get_library_mapping()
-    users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
-    print(f"[*] Starting AI Recommendation Engine...")
-    print(f"[*] Data Location: {DATA_ROOT}")
+    if not lib_map:
+        print("[!] Could not fetch libraries. Skipping run.")
+        return
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=CONFIG['MAX_THREADS']) as executor:
-        futures = {}
-        for idx, user in enumerate(users):
-            futures[executor.submit(process_user, user, lib_map, idx)] = user
+    try:
+        users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
+        print(f"[*] Starting AI Recommendation Engine...")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=CONFIG['MAX_THREADS']) as executor:
+            futures = {}
+            for idx, user in enumerate(users):
+                futures[executor.submit(process_user, user, lib_map, idx)] = user
 
-        for future in concurrent.futures.as_completed(futures):
-            try: print(f"[+] Finished: {future.result()}", flush=True)
-            except Exception as e: print(f"[!] ERROR: {e}", flush=True)
+            for future in concurrent.futures.as_completed(futures):
+                try: print(f"[+] Finished: {future.result()}", flush=True)
+                except Exception as e: print(f"[!] ERROR: {e}", flush=True)
 
-    apply_strict_privacy()
-    print("[!] Run Complete.")
+        apply_strict_privacy()
+        print("[!] Job Complete.")
+        
+    except Exception as e:
+        print(f"[!] Fatal Error during run: {e}")
+
+def main():
+    if not CONFIG.get('DAEMON_MODE', False):
+        # NORMAL MODE (Run Once)
+        run_task()
+    else:
+        # SERVICE MODE (Loop Forever)
+        run_time_str = CONFIG.get('RUN_TIME', "04:00")
+        print(f"[*] DAEMON MODE ACTIVE. Scheduled for {run_time_str} daily.")
+        
+        # Run immediately on startup? Optional. Uncomment next line to run on boot.
+        # run_task() 
+        
+        while True:
+            now = datetime.now()
+            # Parse Target Time
+            target_h, target_m = map(int, run_time_str.split(':'))
+            target = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+            
+            # If target is in the past, schedule for tomorrow
+            if target <= now:
+                target += timedelta(days=1)
+                
+            wait_seconds = (target - now).total_seconds()
+            print(f"[*] Sleeping for {wait_seconds/3600:.2f} hours (Next run: {target})", flush=True)
+            
+            time.sleep(wait_seconds)
+            run_task()
 
 if __name__ == "__main__":
     main()
