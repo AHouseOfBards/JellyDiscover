@@ -1,321 +1,309 @@
 import os
 import sys
 import json
-import subprocess
 import requests
 import sqlite3
-import collections
 import time
-from datetime import datetime, timedelta
+import random
+import shutil
+import concurrent.futures
+from datetime import datetime
+from pathlib import Path
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-import concurrent.futures
-import shutil
-from pathlib import Path
 
-# --- CONFIG & MAPPING ---
+# --------------------------------------------------
+# CONFIG
+# --------------------------------------------------
+
 UI_MAP = {
     "Movies": {"api_type": "movies", "item_type": "Movie"},
-    "4K":     {"api_type": "movies", "item_type": "Movie"},
-    "Docs":   {"api_type": "movies", "item_type": "Movie"},
     "Shows":  {"api_type": "tvshows", "item_type": "Series"},
-    "Music":  {"api_type": "music", "item_type": "MusicAlbum"}
+    "Music":  {"api_type": "music", "item_type": "MusicAlbum"},
 }
 
-# --- DYNAMIC PATH SETUP ---
-if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
+BASE_DIR = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else __file__)
 DATA_ROOT = os.path.join(BASE_DIR, "JellyDiscover_Data")
-
-def load_json(filename):
-    path = os.path.join(BASE_DIR, filename)
-    try:
-        with open(path, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"[!] Error loading {filename}: {e}")
-        sys.exit(1)
-
-CONFIG = load_json('config.json')
-LIBS = load_json('libraries.json')
-
-# --- DB SETUP ---
 DB_FILE = os.path.join(BASE_DIR, "jelly_data.db")
+
+def load_json(name):
+    with open(os.path.join(BASE_DIR, name), "r") as f:
+        return json.load(f)
+
+CONFIG = load_json("config.json")
+LIBS = load_json("libraries.json")
+
+# --------------------------------------------------
+# NETWORK
+# --------------------------------------------------
+
+session = requests.Session()
+retry = Retry(total=3, backoff_factor=1,
+              status_forcelist=[429, 500, 502, 503, 504])
+adapter = HTTPAdapter(max_retries=retry)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+session.headers.update({
+    "X-Emby-Token": CONFIG["API_KEY"],
+    "Content-Type": "application/json"
+})
+TIMEOUT = 120
+
+# --------------------------------------------------
+# DB
+# --------------------------------------------------
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS user_tastes 
-                 (user_id TEXT PRIMARY KEY, genre_weights TEXT, last_updated TEXT)''')
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_prefs (
+            user_id TEXT PRIMARY KEY,
+            prefs TEXT,
+            updated TEXT
+        )
+    """)
     conn.commit()
     return conn
 
-# --- CONNECTION ---
-session = requests.Session()
-retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503, 504])
-adapter = HTTPAdapter(max_retries=retry_strategy)
-session.mount("http://", adapter)
-session.mount("https://", adapter)
-session.headers.update({"X-Emby-Token": CONFIG['API_KEY'], "Content-Type": "application/json"})
-TIMEOUT = 120 
+# --------------------------------------------------
+# CATEGORY WEIGHTS
+# --------------------------------------------------
 
-def get_drive_map():
-    drive_map = {}
-    if os.name == 'nt':
-        try:
-            result = subprocess.run(['net', 'use'], capture_output=True, text=True, timeout=5)
-            for line in result.stdout.splitlines():
-                if ":" in line and "\\\\" in line:
-                    parts = line.split()
-                    drive = next((p for p in parts if ":" in p), None)
-                    unc = next((p for p in parts if p.startswith("\\\\")), None)
-                    if drive and unc:
-                        drive_map[drive.upper()] = unc
-        except Exception:
-            pass 
-    return drive_map
+CATEGORY_WEIGHTS = {
+    "Movies": {
+        "genres": 1.0,
+        "actors": 1.5,
+        "directors": 2.5,
+        "community": 2.0,
+        "collection": 5.0,
+        "seen_penalty": 10.0,
+        "diversity": 1.2
+    },
+    "Shows": {
+        "genres": 1.5,
+        "actors": 2.0,
+        "directors": 1.0,
+        "community": 1.5,
+        "collection": 3.0,
+        "seen_penalty": 6.0,
+        "diversity": 1.0
+    },
+    "Music": {
+        "genres": 2.0,
+        "actors": 0.0,
+        "directors": 0.0,
+        "community": 1.0,
+        "collection": 2.0,
+        "seen_penalty": 4.0,
+        "diversity": 0.8
+    }
+}
 
-DRIVE_MAP = get_drive_map()
+# --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
 
-# --- ENGINE ---
-def analyze_user_taste(user_id, user_name, conn):
-    print(f"    > Analyzing taste for {user_name}...", flush=True)
-    params = {"IncludeItemTypes": "Movie,Series", "Recursive": "true", "Filters": "IsPlayed", "Fields": "Genres", "Limit": 2000}
-    try:
-        res = session.get(f"{CONFIG['JELLYFIN_URL']}/Users/{user_id}/Items", params=params, timeout=TIMEOUT)
-        items = res.json().get("Items", [])
-    except Exception: return {}
+def empty_prefs():
+    return {
+        "genres": {},
+        "actors": {},
+        "directors": {},
+        "collections": set()
+    }
 
-    if not items: return {}
+def inc(d, k, v):
+    d[k] = d.get(k, 0) + v
 
-    genre_counts = collections.Counter()
-    for i in items:
-        for g in i.get("Genres", []):
-            genre_counts[g] += 1
-    
-    if not genre_counts: return {}
+def normalize(d):
+    if not d:
+        return d
+    m = max(d.values())
+    return {k: v / m for k, v in d.items()} if m else d
 
-    most_common_count = genre_counts.most_common(1)[0][1]
-    weights = {}
-    for genre, count in genre_counts.items():
-        weights[genre] = count / most_common_count
-        
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO user_tastes VALUES (?, ?, ?)", (user_id, json.dumps(weights), datetime.now().isoformat()))
-    conn.commit()
-    return weights
+def recency_multiplier(item):
+    last = item.get("LastPlayedDate")
+    if not last:
+        return 0.7
+    days = (datetime.utcnow() -
+            datetime.fromisoformat(last.replace("Z", ""))).days
+    if days < 30: return 1.5
+    if days < 90: return 1.0
+    if days < 365: return 0.6
+    return 0.3
 
-def get_library_mapping():
-    try:
-        response = session.get(f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders", timeout=TIMEOUT)
-        all_libs = response.json()
-    except Exception as e:
-        print(f"[!] Connection Failed: {e}")
-        # In Daemon mode, we don't exit, we just wait and retry later
-        return None 
-    
-    active_map = {}
-    for cat, settings in LIBS['CATEGORIES'].items():
-        if not settings['enabled']: continue
-        if cat not in UI_MAP: continue 
+# --------------------------------------------------
+# USER MODEL
+# --------------------------------------------------
 
-        internal_type = UI_MAP[cat]["api_type"]
-        target_names = settings.get('source_names', [])
-        
-        if target_names:
-            matched_ids = [l["ItemId"] for l in all_libs if l["CollectionType"] == internal_type and l["Name"] in target_names]
-        else:
-            matched_ids = [l["ItemId"] for l in all_libs if l["CollectionType"] == internal_type]
-
-        if matched_ids:
-            active_map[cat] = {
-                "source_ids": matched_ids,
-                "item_type": UI_MAP[cat]["item_type"],
-                "discovery_name": settings['discovery_name'],
-                "min_score": settings['min_community_score'],
-                "collection_type": internal_type
-            }
-    return active_map
-
-def create_symlink(source, target):
-    source_upper = source.upper()
-    for drive, unc in DRIVE_MAP.items():
-        if source_upper.startswith(drive):
-            source = source.replace(source[:2], unc)
-            break
-            
-    if not os.path.isdir(source) and "." in source:
-        ext = os.path.splitext(source)[1]
-        if not str(target).endswith(ext):
-            target = Path(str(target) + ext)
+def analyze_user(user):
+    params = {
+        "Recursive": "true",
+        "Filters": "IsPlayed",
+        "Fields": "Genres,People,CollectionName,LastPlayedDate,UserData",
+        "Limit": 3000
+    }
 
     try:
-        if CONFIG['OS_TYPE'] == "windows":
-            flag = "/D" if os.path.isdir(source) else ""
-            subprocess.run(f'mklink {flag} "{target}" "{source}"', shell=True, capture_output=True, timeout=5)
-        else:
-            os.symlink(source, target, target_is_directory=os.path.isdir(source))
+        items = session.get(
+            f"{CONFIG['JELLYFIN_URL']}/Users/{user['Id']}/Items",
+            params=params,
+            timeout=TIMEOUT
+        ).json().get("Items", [])
     except Exception:
-        pass
+        items = []
+
+    prefs = empty_prefs()
+
+    for i in items:
+        w = recency_multiplier(i)
+
+        if i.get("UserData", {}).get("Played") and i.get("PlayCount", 0) == 1:
+            w *= 0.5
+
+        for g in i.get("Genres", []):
+            inc(prefs["genres"], g, 1.0 * w)
+
+        for p in i.get("People", []):
+            if p["Type"] == "Director":
+                inc(prefs["directors"], p["Name"], 4.0 * w)
+            elif p["Type"] == "Actor":
+                inc(prefs["actors"], p["Name"], 2.0 * w)
+
+        if i.get("CollectionName"):
+            prefs["collections"].add(i["CollectionName"])
+
+    prefs["genres"] = normalize(prefs["genres"])
+    prefs["actors"] = normalize(prefs["actors"])
+    prefs["directors"] = normalize(prefs["directors"])
+
+    has_history = len(items) >= 5
+    return prefs, has_history
+
+# --------------------------------------------------
+# SCORING
+# --------------------------------------------------
+
+def score_item(item, prefs, weights, cold):
+    score = 0.0
+
+    cr = item.get("CommunityRating")
+    if cr:
+        score += max(0, cr - 6.5) * weights["community"]
+
+    if not cold:
+        for g in item.get("Genres", []):
+            score += prefs["genres"].get(g, 0) * weights["genres"]
+
+        for p in item.get("People", []):
+            if p["Type"] == "Director":
+                score += prefs["directors"].get(p["Name"], 0) * weights["directors"]
+            elif p["Type"] == "Actor":
+                score += prefs["actors"].get(p["Name"], 0) * weights["actors"]
+
+        if item.get("CollectionName") in prefs["collections"]:
+            score += weights["collection"]
+
+        if item.get("UserData", {}).get("Played"):
+            score -= weights["seen_penalty"]
+
+    score += random.uniform(0, weights["diversity"])
+    return score
+
+# --------------------------------------------------
+# USER PROCESSING
+# --------------------------------------------------
 
 def process_user(user, lib_map, index):
-    u_name, u_id = user['Name'], user['Id']
-    conn = sqlite3.connect(DB_FILE)
-    weights = analyze_user_taste(u_id, u_name, conn)
-    
-    safe_fs_name = "".join(c for c in u_name if c.isalnum() or c in " -_").strip()
-    if not safe_fs_name: safe_fs_name = u_id
-    invisible_suffix = "\u3164" * (index + 1)
+    prefs, has_history = analyze_user(user)
+    safe = "".join(c for c in user["Name"] if c.isalnum() or c in " -_")
+    suffix = "\u3164" * (index + 1)
 
-    for cat_name, meta in lib_map.items():
-        params = {"ParentIds": ",".join(meta["source_ids"]), "IncludeItemTypes": meta["item_type"], "Recursive": "true", "Fields": "Path,CommunityRating,Genres", "Limit": 500}
-        
-        items = session.get(f"{CONFIG['JELLYFIN_URL']}/Users/{u_id}/Items", params=params, timeout=TIMEOUT).json().get("Items", [])
+    for cat, meta in lib_map.items():
+        weights = CATEGORY_WEIGHTS.get(cat, CATEGORY_WEIGHTS["Movies"])
+
+        params = {
+            "ParentIds": ",".join(meta["source_ids"]),
+            "IncludeItemTypes": meta["item_type"],
+            "Recursive": "true",
+            "Fields": "Path,CommunityRating,Genres,People,CollectionName,UserData",
+            "Limit": 600
+        }
+
+        items = session.get(
+            f"{CONFIG['JELLYFIN_URL']}/Users/{user['Id']}/Items",
+            params=params,
+            timeout=TIMEOUT
+        ).json().get("Items", [])
+
         scored = []
-        bias_strength = CONFIG.get("BIAS_STRENGTH", 0.0)
-
         for i in items:
-            path = i.get("Path")
-            base_score = i.get("CommunityRating", 0)
-            
-            bonus = 0.0
-            if weights and bias_strength > 0:
-                item_genres = i.get("Genres", [])
-                for g in item_genres:
-                    if g in weights: bonus += weights[g] * bias_strength
-                if len(item_genres) > 0: bonus = bonus / len(item_genres)
+            if not i.get("Path"):
+                continue
+            s = score_item(i, prefs, weights, not has_history)
+            if s >= meta["min_score"]:
+                i["_Score"] = s
+                scored.append(i)
 
-            final_score = base_score + bonus
+        scored.sort(key=lambda x: x["_Score"], reverse=True)
+        top = scored[:CONFIG["RECOMMENDATION_COUNT"]]
 
-            if not path or final_score < meta["min_score"]: continue
-            i['_FinalScore'] = final_score
-            scored.append(i)
-        
-        scored.sort(key=lambda x: x['_FinalScore'], reverse=True)
-        top_recs = scored[:CONFIG['RECOMMENDATION_COUNT']]
+        out = Path(DATA_ROOT) / safe / cat
+        if out.exists():
+            shutil.rmtree(out)
+        out.mkdir(parents=True, exist_ok=True)
 
-        user_cat_path = Path(DATA_ROOT) / safe_fs_name / cat_name
-        
-        if user_cat_path.exists(): shutil.rmtree(user_cat_path)
-        user_cat_path.mkdir(parents=True, exist_ok=True)
+        for i in top:
+            name = "".join(c for c in i["Name"] if c.isalnum() or c in " -_")
+            try:
+                os.symlink(i["Path"], out / name)
+            except Exception:
+                pass
 
-        for item in top_recs:
-            clean_name = "".join(c for c in item['Name'] if c.isalnum() or c in " -_")
-            create_symlink(item['Path'], user_cat_path / clean_name)
+        session.post(
+            f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders",
+            params={
+                "name": f"{meta['discovery_name']}{suffix}",
+                "collectionType": meta["collection_type"],
+                "paths": [str(out)],
+                "refreshLibrary": "true"
+            },
+            json={}
+        )
 
-        clean_display_name = f"{meta['discovery_name']}{invisible_suffix}"
-        v_folders = session.get(f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders", timeout=TIMEOUT).json()
-        
-        if not any(f["Name"] == clean_display_name for f in v_folders):
-            api_params = {"name": clean_display_name, "collectionType": meta['collection_type'], "paths": [str(user_cat_path)], "refreshLibrary": "true"}
-            session.post(f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders", params=api_params, json={}, timeout=TIMEOUT)
-            
-    conn.close()
-    return u_name
+    return user["Name"]
 
-def apply_strict_privacy():
-    print("\n[*] Applying Privacy Shield...")
-    try:
-        users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
-        libs = session.get(f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders", timeout=TIMEOUT).json()
-    except:
-        print("[!] Connection lost during Privacy Shield application.")
-        return
+# --------------------------------------------------
+# RUN
+# --------------------------------------------------
 
-    public_ids = []
-    user_private_map = {u['Id']: [] for u in users}
-    discovery_root_name = os.path.basename(DATA_ROOT) 
+def run():
+    os.makedirs(DATA_ROOT, exist_ok=True)
+    init_db()
 
-    for lib in libs:
-        locs = lib.get('Locations', [])
-        if not locs: 
-            public_ids.append(lib['ItemId'])
+    libs = session.get(
+        f"{CONFIG['JELLYFIN_URL']}/Library/VirtualFolders",
+        timeout=TIMEOUT
+    ).json()
+
+    lib_map = {}
+    for cat, cfg in LIBS["CATEGORIES"].items():
+        if not cfg["enabled"] or cat not in UI_MAP:
             continue
-        path = locs[0]
-        
-        if discovery_root_name in path:
-            matched_owner = None
-            for user in users:
-                u_name = user['Name']
-                safe_fs_name = "".join(c for c in u_name if c.isalnum() or c in " -_").strip()
-                if not safe_fs_name: safe_fs_name = user['Id']
-                if f"{os.sep}{safe_fs_name}{os.sep}" in path:
-                    matched_owner = user['Id']
-                    break
-            if matched_owner: user_private_map[matched_owner].append(lib['ItemId'])
-        else:
-            public_ids.append(lib['ItemId'])
+        ids = [l["ItemId"] for l in libs if l["CollectionType"] == UI_MAP[cat]["api_type"]]
+        if ids:
+            lib_map[cat] = {
+                "source_ids": ids,
+                "item_type": UI_MAP[cat]["item_type"],
+                "discovery_name": cfg["discovery_name"],
+                "min_score": cfg["min_community_score"],
+                "collection_type": UI_MAP[cat]["api_type"]
+            }
 
-    for user in users:
-        u_id = user['Id']
-        u_name = user['Name']
-        policy = user.get("Policy", {})
-        allowed = public_ids.copy()
-        if u_id in user_private_map: allowed.extend(user_private_map[u_id])
-        policy["EnableAllFolders"] = False
-        policy["EnabledFolders"] = allowed
-        session.post(f"{CONFIG['JELLYFIN_URL']}/Users/{u_id}/Policy", json=policy, timeout=TIMEOUT)
-        print(f"    [SECURE] {u_name}", flush=True)
+    users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
 
-def run_task():
-    print(f"\n--- Starting Job: {datetime.now()} ---")
-    if not os.path.exists(DATA_ROOT): os.makedirs(DATA_ROOT)
-    init_db() 
-    
-    lib_map = get_library_mapping()
-    if not lib_map:
-        print("[!] Could not fetch libraries. Skipping run.")
-        return
-
-    try:
-        users = session.get(f"{CONFIG['JELLYFIN_URL']}/Users", timeout=TIMEOUT).json()
-        print(f"[*] Starting AI Recommendation Engine...")
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=CONFIG['MAX_THREADS']) as executor:
-            futures = {}
-            for idx, user in enumerate(users):
-                futures[executor.submit(process_user, user, lib_map, idx)] = user
-
-            for future in concurrent.futures.as_completed(futures):
-                try: print(f"[+] Finished: {future.result()}", flush=True)
-                except Exception as e: print(f"[!] ERROR: {e}", flush=True)
-
-        apply_strict_privacy()
-        print("[!] Job Complete.")
-        
-    except Exception as e:
-        print(f"[!] Fatal Error during run: {e}")
-
-def main():
-    if not CONFIG.get('DAEMON_MODE', False):
-        # NORMAL MODE (Run Once)
-        run_task()
-    else:
-        # SERVICE MODE (Loop Forever)
-        run_time_str = CONFIG.get('RUN_TIME', "04:00")
-        print(f"[*] DAEMON MODE ACTIVE. Scheduled for {run_time_str} daily.")
-        
-        # Run immediately on startup? Optional. Uncomment next line to run on boot.
-        # run_task() 
-        
-        while True:
-            now = datetime.now()
-            # Parse Target Time
-            target_h, target_m = map(int, run_time_str.split(':'))
-            target = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
-            
-            # If target is in the past, schedule for tomorrow
-            if target <= now:
-                target += timedelta(days=1)
-                
-            wait_seconds = (target - now).total_seconds()
-            print(f"[*] Sleeping for {wait_seconds/3600:.2f} hours (Next run: {target})", flush=True)
-            
-            time.sleep(wait_seconds)
-            run_task()
+    with concurrent.futures.ThreadPoolExecutor(CONFIG["MAX_THREADS"]) as ex:
+        for i, u in enumerate(users):
+            ex.submit(process_user, u, lib_map, i)
 
 if __name__ == "__main__":
-    main()
+    run()
