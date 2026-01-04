@@ -1,0 +1,16 @@
+[Unit]
+Description=JellyDiscover Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+# We assume the user clones into /opt/JellyDiscover as per README
+WorkingDirectory=/opt/JellyDiscover
+# Points to the python file in src/
+ExecStart=/usr/bin/python3 /opt/JellyDiscover/src/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

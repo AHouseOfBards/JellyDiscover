@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  jellydiscover:
+    container_name: jellydiscover
+    build: . 
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - TZ=America/New_York
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      # 1. DATA PERSISTENCE (FIXED)
+      # Maps local ./data folder to /config inside container
+      # This matches the priority logic in utils.py
+      - ./data:/config
+
+      # 2. MEDIA MOUNTS
+      # You can add as many lines here as you have drives/folders.
+      # The container needs read-only access (:ro) to verify files exist.
+      
+      # Example 1: Main Media Library
+      - /path/to/media:/media:ro
+      
+      # Example 2: Second Drive (Uncomment if needed)
+      # - /mnt/disk2/movies:/media/disk2_movies:ro
+      
+      # Example 3: Windows Docker (Uncomment if needed)
+      # - D:\Movies:/movies:ro
+      # - E:\TV:/tv:ro

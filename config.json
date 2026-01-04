@@ -1,0 +1,44 @@
+{
+    "JELLYFIN_URL": "http://localhost:8096",
+    "API_KEY": "",
+    "MAX_THREADS": 2,
+    "SCHEDULE_FREQ": 24,
+    "RUN_TIME": "04:00",
+    "DASHBOARD_PORT": 5000,
+    "LOG_LEVEL": "INFO",
+    "PATH_SUBSTITUTIONS": {
+        "/media/example_remote": "/mnt/local/example"
+    },
+    "SCORING": {
+        "RECENCY_WEIGHT": 1.0,
+        "DISCOVERY_BIAS": {
+            "Movies": {
+                "genres": 1.0,
+                "actors": 1.5,
+                "directors": 2.5,
+                "community": 2.0,
+                "collection": 5.0,
+                "seen_penalty": 10.0,
+                "diversity": 1.2
+            },
+            "Shows": {
+                "genres": 1.5,
+                "actors": 2.0,
+                "directors": 1.0,
+                "community": 1.5,
+                "collection": 3.0,
+                "seen_penalty": 6.0,
+                "diversity": 1.0
+            },
+            "Music": {
+                "genres": 2.0,
+                "actors": 0.0,
+                "directors": 0.0,
+                "community": 1.0,
+                "collection": 2.0,
+                "seen_penalty": 4.0,
+                "diversity": 0.8
+            }
+        }
+    }
+}

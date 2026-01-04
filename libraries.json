@@ -1,0 +1,19 @@
+{
+    "CATEGORIES": {
+        "Movies": {
+            "enabled": true,
+            "discovery_name": "Discover Movies",
+            "min_community_score": 5.0
+        },
+        "Shows": {
+            "enabled": true,
+            "discovery_name": "Discover Shows",
+            "min_community_score": 5.0
+        },
+        "Music": {
+            "enabled": true,
+            "discovery_name": "Discover Music",
+            "min_community_score": 0.0
+        }
+    }
+}

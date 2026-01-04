@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JellyDiscover v1.1</title>
+    <style>
+        :root { --sidebar-bg: #1e1e1e; --main-bg: #121212; --accent: #a964da; --text: #e0e0e0; --card: #2d2d2d; --danger: #e74c3c; --success: #2ecc71; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--main-bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR */
+        .sidebar { width: 250px; background: var(--sidebar-bg); padding: 20px; display: flex; flex-direction: column; border-right: 1px solid #333; }
+        .logo { font-size: 24px; font-weight: bold; color: var(--accent); margin-bottom: 40px; text-align: center; }
+        .nav-btn { background: none; border: none; color: #888; padding: 15px; text-align: left; font-size: 16px; cursor: pointer; transition: 0.2s; border-radius: 8px; margin-bottom: 5px; width: 100%; }
+        .nav-btn:hover, .nav-btn.active { background: #333; color: white; }
+        .nav-btn.active { border-left: 4px solid var(--accent); }
+        .footer { margin-top: auto; font-size: 12px; color: #555; text-align: center; }
+        .footer a { color: #777; text-decoration: none; }
+
+        /* CONTENT */
+        .main { flex: 1; padding: 40px; overflow-y: auto; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* CARDS & FORMS */
+        h2 { margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        .card { background: var(--card); padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 14px; color: #ccc; }
+        .help-text { display: block; font-size: 11px; color: #888; margin-bottom: 8px; font-style: italic; }
+        
+        input[type="text"], input[type="number"], input[type="time"], select { width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #444; color: white; border-radius: 6px; margin-bottom: 15px; box-sizing: border-box; }
+        
+        /* SCORING GRID */
+        .score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
+        .score-item { background: #222; padding: 15px; border-radius: 8px; border: 1px solid #333; }
+        .score-item h4 { margin: 0 0 10px 0; color: var(--accent); border-bottom: 1px solid #444; padding-bottom: 5px; }
+        
+        /* TABLE STYLES */
+        .mapping-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        .mapping-table th { text-align: left; border-bottom: 1px solid #444; padding: 8px; color: #888; }
+        .mapping-table td { padding: 8px; border-bottom: 1px solid #333; }
+        .mapping-table tr:last-child { border-bottom: none; }
+
+        /* BUTTONS */
+        .btn { padding: 12px 24px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-block; }
+        .btn-primary { background: var(--accent); color: white; width: 100%; }
+        .btn-primary:hover { background: #8e44ad; }
+        .btn-danger { background: var(--danger); color: white; padding: 6px 12px; font-size: 0.8em; }
+        .btn-run { background: var(--success); color: white; width: 100%; margin-bottom: 10px;}
+        .btn-restart { background: #f39c12; color: white; border-radius: 4px; padding: 10px 20px; }
+
+        /* FLASH MSG */
+        .flash { background: #27ae60; color: white; padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center; }
+        .status-badge { display: inline-block; padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .status-running { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+        .status-stopped { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+
+        /* BANNERS */
+        .banner { padding: 20px; border-radius: 8px; margin-bottom: 20px; color: white; }
+        .banner-error { background: #c0392b; border-left: 5px solid #e74c3c; }
+        .error-title { font-weight: bold; font-size: 18px; margin-bottom: 5px; display: flex; align-items: center; gap: 10px; }
+        .error-list { margin: 10px 0 0 20px; font-size: 14px; }
+        .log-path { background: rgba(0,0,0,0.3); padding: 5px; border-radius: 4px; font-family: monospace; font-size: 12px; display: inline-block; margin-top: 10px; }
+        .banner-warning { background: #f39c12; border-left: 5px solid #d35400; color: white; }
+
+        /* MODAL */
+        .modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); }
+        .modal-content { background-color: #2d2d2d; margin: 15% auto; padding: 20px; border: 1px solid #f39c12; width: 400px; border-radius: 10px; text-align: center; box-shadow: 0 0 20px rgba(243, 156, 18, 0.4); }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <div id="restartModal" class="modal">
+        <div class="modal-content">
+            <h3 style="color: #f39c12;">⚠️ Restart Required</h3>
+            <p>You changed settings that require the service to restart.</p>
+            <div class="modal-buttons">
+                <form action="/action" method="post">
+                    <input type="hidden" name="cmd" value="restart_service">
+                    <button class="btn btn-restart">Restart Now</button>
+                </form>
+                <button class="btn" onclick="document.getElementById('restartModal').style.display='none'" style="background:#555; color:white;">Restart Later</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="logo">JellyDiscover</div>
+        <button class="nav-btn active" onclick="showTab('home')">🏠 Home</button>
+        <button class="nav-btn" onclick="showTab('config')">⚙️ Configuration</button>
+        <button class="nav-btn" onclick="showTab('maintenance')">🛠️ Maintenance</button>
+        <div class="footer">
+            v1.1.0<br>
+            <a href="https://github.com/AHouseOfBards/JellyDiscover" target="_blank">View on GitHub</a>
+        </div>
+    </div>
+
+    <div class="main">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% if messages[0] == "RESTART_REQUIRED" %}
+                    <script>document.getElementById('restartModal').style.display = 'block';</script>
+                {% else %}
+                    <div class="flash">{{ messages[0] }}</div>
+                {% endif %}
+            {% endif %}
+        {% endwith %}
+
+        {% if not last_run.success and last_run.errors %}
+        <div class="banner banner-error">
+            <div class="error-title">⚠️ Discovery Issues Detected</div>
+            <div>The last run ({{ last_run.last_run }}) failed to complete successfully.</div>
+            <ul class="error-list">
+                {% for err in last_run.errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+            <div class="log-path">Log: {{ last_run.log_path }}</div>
+        </div>
+        {% endif %}
+
+        {% if not config.API_KEY or config.API_KEY == "" %}
+        <div class="banner banner-warning">
+            <div style="font-weight: bold; font-size: 18px; margin-bottom: 5px;">⚠️ Setup Required</div>
+            <div>JellyDiscover cannot run because the API Key is missing. Please go to the <b>Configuration</b> tab to finish setup.</div>
+        </div>
+        {% endif %}
+
+        <div id="home" class="tab-content active">
+            <h2>System Status</h2>
+            <div class="card" style="text-align: center;">
+                <p>Status: 
+                    {% if "Running" in status %}
+                        <span class="status-badge status-running">{{ status }}</span>
+                    {% else %}
+                        <span class="status-badge status-stopped">{{ status }}</span>
+                    {% endif %}
+                </p>
+                <p><small>Platform: {{ info.os }} | Mode: {{ "Docker" if is_docker else "Standard" }}</small></p>
+                <p><small>Next Run Anchor: {{ config.RUN_TIME }}</small></p>
+                
+                <form action="/action" method="post" style="margin-top: 20px;">
+                    <input type="hidden" name="cmd" value="run_now">
+                    <button class="btn btn-run">▶ Run Discovery Now</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="config" class="tab-content">
+            <h2>Configuration</h2>
+            <form action="/save_config" method="post">
+                <div class="card">
+                    <h3>Connection</h3>
+                    <label>Jellyfin URL</label>
+                    <input type="text" name="jellyfin_url" value="{{ config.JELLYFIN_URL }}" placeholder="http://localhost:8096">
+                    <label>API Key</label>
+                    <input type="text" name="api_key" value="{{ config.API_KEY }}">
+                    
+                    <label>Dashboard Port</label>
+                    {% if is_docker %}
+                        <input type="number" name="dashboard_port" value="{{ config.get('DASHBOARD_PORT', 5000) }}" readonly style="opacity: 0.5; cursor: not-allowed;">
+                        <span class="help-text">Port is managed by Docker. Change it in docker-compose.yml.</span>
+                    {% else %}
+                        <input type="number" name="dashboard_port" value="{{ config.get('DASHBOARD_PORT', 5000) }}">
+                        <span class="help-text">Changing this requires a service restart.</span>
+                    {% endif %}
+                </div>
+
+                <div class="card">
+                    <h3>Automation & Performance</h3>
+                    <div style="display:flex; gap:15px; align-items: flex-start;">
+                        <div style="flex:1;">
+                            <label>Run Frequency</label>
+                            <select name="schedule_freq">
+                                <option value="12" {% if config.get('SCHEDULE_FREQ', 24) == 12 %}selected{% endif %}>Every 12 Hours</option>
+                                <option value="24" {% if config.get('SCHEDULE_FREQ', 24) == 24 %}selected{% endif %}>Daily (24h)</option>
+                                <option value="48" {% if config.get('SCHEDULE_FREQ', 24) == 48 %}selected{% endif %}>Every 2 Days (48h)</option>
+                                <option value="168" {% if config.get('SCHEDULE_FREQ', 24) == 168 %}selected{% endif %}>Weekly (7 Days)</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label>Anchor Time</label>
+                            <input type="time" name="run_time" value="{{ config.get('RUN_TIME', '04:00') }}">
+                        </div>
+                        <div style="flex:1;">
+                            <label>Max Threads</label>
+                            <input type="number" name="max_threads" value="{{ config.get('MAX_THREADS', 2) }}" min="1" max="16">
+                            <span class="help-text">CPU cores to use (Default: 2)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">📂 Path Substitutions</h3>
+                    <p style="font-size:0.9em; color:#aaa; margin-bottom: 15px;">
+                        <b>Usually only needed for Docker users.</b> Windows users should use the Installer credentials for network drives.
+                    </p>
+                    
+                    <table class="mapping-table">
+                        <thead>
+                            <tr>
+                                <th>Jellyfin Path (Remote)</th>
+                                <th>Local Path</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for remote, local in config.get('PATH_SUBSTITUTIONS', {}).items() %}
+                            <tr>
+                                <td>{{ remote }}</td>
+                                <td>{{ local }}</td>
+                                <td>
+                                    <button type="submit" name="remove_path" value="{{ remote }}" class="btn btn-danger">Remove</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr style="background: #252525;">
+                                <td><input type="text" name="new_remote_path" placeholder="/media/movies" style="margin:0;"></td>
+                                <td><input type="text" name="new_local_path" placeholder="Z:\Movies" style="margin:0;"></td>
+                                <td><small style="color:#888;">Save to Add</small></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h3>Discovery Algorithm Bias</h3>
+                    <div class="score-grid">
+                        {% for category, weights in config.SCORING.DISCOVERY_BIAS.items() %}
+                        <div class="score-item">
+                            <h4>{{ category }}</h4>
+                            {% for factor, val in weights.items() %}
+                                <label>{{ factor|capitalize }}</label>
+                                <input type="number" step="0.1" name="{{ category }}_{{ factor }}" value="{{ val }}">
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="margin-bottom: 50px;">Save Configuration</button>
+            </form>
+        </div>
+
+        <div id="maintenance" class="tab-content">
+            <h2>Maintenance</h2>
+            <div class="card">
+                <h3>Logs</h3>
+                <p>Logs are stored locally for troubleshooting.</p>
+                <div class="log-path">Location: {{ info.logs_dir }}</div>
+                
+                <br><br>
+                <a href="/logs" target="_blank" class="btn btn-primary" style="text-decoration:none; display:inline-block; width: auto; padding: 10px 20px;">
+                    📄 View Live Logs
+                </a>
+
+                {% if last_run.log_path %}
+                <br><br><div class="log-path" style="background:#222">Latest Log: {{ last_run.log_path }}</div>
+                {% endif %}
+            </div>
+            
+            <div class="card">
+                <h3>Clean Up</h3>
+                <form action="/action" method="post">
+                    <input type="hidden" name="cmd" value="clean">
+                    <button class="btn btn-primary">Run Cleaner Utility</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>
