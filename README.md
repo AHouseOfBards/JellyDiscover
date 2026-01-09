@@ -9,6 +9,9 @@ JellyDiscover is a standalone recommendation engine that analyzes watch history 
 * **Self-Healing:** Automatically refreshes libraries and cleans up stale entries to keep Jellyfin in sync.
 * **Universal:** Works on Windows, Linux, and Docker.
 * **Dashboard:** A web-based GUI to manage settings, schedules, and path mappings.
+<img width="2256" height="1072" alt="JDP1" src="https://github.com/user-attachments/assets/07fb779c-cd15-4d3c-871e-cc19f91590f9" />
+<img width="2227" height="852" alt="JDP2" src="https://github.com/user-attachments/assets/a6aa4695-65ef-4ab5-bdf6-242757af8f01" />
+<img width="2254" height="1058" alt="JDP3" src="https://github.com/user-attachments/assets/1d0fbfb1-5ac3-4fd5-9ce6-c99c585c5dba" />
 
 ---
 
@@ -108,4 +111,5 @@ Logs are located in `C:\ProgramData\JellyDiscover\logs\JellyDiscover.log` (Windo
 
 ### How to Uninstall
 * **Windows:** Use the Uninstaller in Control Panel. It will ask if you want to run the Cleanup Tool to remove the Virtual Libraries from Jellyfin.
+
 * **Linux/Docker:** Run `python3 src/cleaner.py` manually, then delete the folder.
