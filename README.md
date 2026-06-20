@@ -7,7 +7,7 @@ JellyDiscover is a standalone recommendation engine that analyzes watch history 
 * **Personalized:** Analyzes user history to recommend unwatched content they will actually like.
 * **Zero-Copy:** Uses `.strm` files and Symlinks to link to your media. No extra storage space is consumed.
 * **Self-Healing:** Automatically refreshes libraries and cleans up stale entries to keep Jellyfin in sync.
-* **Universal:** Works on Windows, Linux, and Docker.
+* **Universal:** Works on Windows and Docker.
 * **Dashboard:** A web-based GUI to manage settings, schedules, and path mappings.
 <img width="2256" height="1072" alt="JDP1" src="https://github.com/user-attachments/assets/07fb779c-cd15-4d3c-871e-cc19f91590f9" />
 <img width="2227" height="852" alt="JDP2" src="https://github.com/user-attachments/assets/a6aa4695-65ef-4ab5-bdf6-242757af8f01" />
@@ -15,11 +15,11 @@ JellyDiscover is a standalone recommendation engine that analyzes watch history 
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Option 1: Windows (Installer)
 **Best for:** Standard Windows users.
-1.  Download the latest `JellyDiscover_Setup_v1.1.0.exe` from [Releases].
+1.  Download the latest `JellyDiscover_Setup_{{LatestVersion}}.exe` from [Releases](https://github.com/AHouseOfBards/JellyDiscover/releases).
 2.  Run the installer.
 3.  **Drive Configuration Step:**
     * **Local Drives:** Select this if your media is on internal drives (`C:\`, `D:\`).
@@ -29,7 +29,7 @@ JellyDiscover is a standalone recommendation engine that analyzes watch history 
 
 ### Option 2: Docker (Compose)
 **Best for:** Unraid, Synology, TrueNAS Scale.
-1.  Download `JellyDiscover_Docker_v1.1.0.zip` from [Releases].
+1.  Download `JellyDiscover_Docker_{{LatestVersion}}.zip` from [Releases](https://github.com/AHouseOfBards/JellyDiscover/releases).
 2.  Extract it to a folder on your server.
 3.  Open `docker-compose.yml` and **edit the volume mounts** to match your media folders:
     ```yaml
@@ -42,13 +42,12 @@ JellyDiscover is a standalone recommendation engine that analyzes watch history 
 4.  Run `docker-compose up -d --build`.
 5.  Open `http://localhost:5000`. You **must** configure the **Path Substitutions** table (see below).
 
-### Option 3: Linux (Manual)
-**Best for:** Ubuntu, Debian, Fedora (Running natively).
-1.  **Download & Extract:**
-    Download `JellyDiscover_Linux_v1.1.0.zip` from [Releases].
+### Option 3: There is no Linux Distribution install manually
+Prerequisites: Python3.11+
+1.  **clone project**
     ```bash
-    unzip JellyDiscover_Linux_v1.1.0.zip -d /opt/
-    cd /opt/JellyDiscover
+        git clone git@github.com:AHouseOfBards/JellyDiscover.git /opt/JellyDiscover
+        cd /opt/JellyDiscover
     ```
 2.  **Install Dependencies:**
     ```bash
@@ -69,7 +68,7 @@ JellyDiscover is a standalone recommendation engine that analyzes watch history 
 
 ---
 
-## ⚙️ The Dashboard
+## The Dashboard
 Access the web interface at `http://localhost:5000`.
 
 ### 1. Connection
@@ -96,7 +95,7 @@ Adjust how the recommendation algorithm weighs different factors.
 
 ---
 
-## 🛠 Troubleshooting & Errors
+## Troubleshooting & Errors
 
 ### Common Log Errors
 Logs are located in `C:\ProgramData\JellyDiscover\logs\JellyDiscover.log` (Windows) or `./data/logs/JellyDiscover.log` (Linux/Docker).

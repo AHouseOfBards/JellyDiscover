@@ -7,17 +7,18 @@ import threading
 import webbrowser
 import psutil
 import logging
+import utils
 from flask import Flask, render_template, request, redirect, url_for, flash
 
-# ==========================================
-# 0. CRITICAL BOOTSTRAP LOGGING
-# ==========================================
-# This ensures we catch errors even if 'import utils' fails
-LOG_DIR = os.path.join(os.environ.get('ProgramData', 'C:\\ProgramData'), 'JellyDiscover', 'logs')
+
+BASE_DIR = utils.BASE_DIR
+
+LOG_DIR = utils.LOG_DIR
 os.makedirs(LOG_DIR, exist_ok=True)
+
 logging.basicConfig(
     filename=os.path.join(LOG_DIR, "dashboard.log"),
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s %(levelname)s: %(message)s'
 )
 
@@ -32,11 +33,6 @@ except Exception as e:
 # ==========================================
 # 1. PATH SETUP (The 500 Error Fix)
 # ==========================================
-if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 template_dir = os.path.join(BASE_DIR, 'templates')
 app = Flask(__name__, template_folder=template_dir)
 app.secret_key = "jellydiscover_secure_key_v1"
@@ -117,7 +113,6 @@ def index():
         platform_info = utils.get_platform_info()
         last_run_status = utils.get_last_status()
         
-        # RESTORED: Full Scoring Defaults Logic
         # Without this, a fresh install shows a blank configuration page
         if "SCORING" not in config:
             config["SCORING"] = {
@@ -138,16 +133,27 @@ def index():
         # Restore Path Substitutions Logic
         if "PATH_SUBSTITUTIONS" not in config:
             config["PATH_SUBSTITUTIONS"] = {}
+        
+        libraries_data = utils.load_libraries()
+        if not libraries_data or "CATEGORIES" not in libraries_data:
+            libraries_data = {
+                "CATEGORIES": {
+                    "Movies": {"enabled": False, "discovery_name": "Discover Movies", "min_community_score": 5.0},
+                    "Shows": {"enabled": False, "discovery_name": "Discover Shows", "min_community_score": 5.0},
+                    "Music": {"enabled": False, "discovery_name": "Discover Music", "min_community_score": 0.0}
+                }
+            }
 
         return render_template('index.html', 
                                config=config, 
                                status=status, 
                                info=platform_info,
                                last_run=last_run_status,
+                               libraries=libraries_data,
                                is_docker=utils.IS_DOCKER)
     except Exception as e:
         logging.error(f"Index Route Crash: {e}", exc_info=True)
-        return f"Internal Server Error (Check C:\\ProgramData\\JellyDiscover\\logs\\dashboard.log): {e}", 500
+        return f"Internal Server Error (Check {LOG_DIR}/dashboard.log): {e}", 500
 
 @app.route('/save_config', methods=['POST'])
 def save_config():
@@ -156,19 +162,20 @@ def save_config():
         form = request.form
         restart_needed = False
         
-        # 1. General Settings
+        # General Settings
         current_conf['JELLYFIN_URL'] = form.get('jellyfin_url')
         current_conf['API_KEY'] = form.get('api_key')
         current_conf['RUN_TIME'] = form.get('run_time', '04:00')
+        current_conf['USE_NETWORK_DRIVE'] = 'use_network_drive' in form
         
-        # New: Thread Count (with safe integer conversion)
+        # Thread Count (with safe integer conversion)
         try: current_conf['MAX_THREADS'] = int(form.get('max_threads', 2))
         except: current_conf['MAX_THREADS'] = 2
 
         try: current_conf['SCHEDULE_FREQ'] = int(form.get('schedule_freq', 24))
         except: current_conf['SCHEDULE_FREQ'] = 24
         
-        # 2. Port Change Check
+        # Port Change Check
         if not utils.IS_DOCKER:
             old_port = current_conf.get('DASHBOARD_PORT', 5000)
             try: new_port = int(form.get('dashboard_port', 5000))
@@ -177,7 +184,7 @@ def save_config():
             current_conf['DASHBOARD_PORT'] = new_port
             if old_port != new_port: restart_needed = True
         
-        # 3. Path Mappings
+        # Path Mappings
         if "PATH_SUBSTITUTIONS" not in current_conf: current_conf["PATH_SUBSTITUTIONS"] = {}
         
         path_to_remove = form.get('remove_path')
@@ -191,7 +198,7 @@ def save_config():
             new_local = new_local.replace('\\', '/')
             current_conf['PATH_SUBSTITUTIONS'][new_remote] = new_local
 
-        # 4. Scoring Logic
+        # Scoring Logic
         if "SCORING" not in current_conf: current_conf["SCORING"] = {"DISCOVERY_BIAS": {}}
         bias_map = current_conf["SCORING"]["DISCOVERY_BIAS"]
         
@@ -202,6 +209,14 @@ def save_config():
                 if input_key in form:
                     try: bias_map[category][factor] = float(form[input_key])
                     except ValueError: pass
+        
+        lib_data = utils.load_libraries()
+        if "CATEGORIES" in lib_data:
+            for category in lib_data["CATEGORIES"]:
+                # If checked, browser form sends 'on', otherwise it is omitted
+                is_enabled = form.get(f'lib_{category}') == 'on'
+                lib_data["CATEGORIES"][category]["enabled"] = is_enabled
+            utils.save_libraries(lib_data)
 
         utils.save_config(current_conf)
         
@@ -250,6 +265,8 @@ def action():
                 flash("Cleanup Utility started.")
             else: flash("Error: cleaner not found.")
 
+        # TODO: replace with a more robust service management system, or just get rid of it. 
+        # The fuck is NSSM.EXE why is there a windows binary without the source? why do you need a seperate binary for restarting a service?
         elif cmd == "restart_service":
             if utils.IS_WINDOWS and not utils.IS_DOCKER:
                  # Windows NSSM Logic (Existing)
@@ -265,7 +282,7 @@ def action():
                  sys.exit(1)
                  
             else: 
-                 # NEW: Linux Systemd Logic
+                 # Linux Systemd Logic
                  # Try to restart via systemctl (requires sudoers permission or root)
                  try:
                      subprocess.run(["sudo", "systemctl", "restart", "jellydiscover"], check=True)
@@ -309,22 +326,7 @@ def view_logs():
     except Exception as e:
         content = f"Error reading logs: {e}"
         
-    return f"""
-    <html>
-        <head>
-            <title>JellyDiscover Logs</title>
-            <meta http-equiv="refresh" content="5"> 
-        </head>
-        <body style="background:#121212; color:#e0e0e0; font-family:monospace; padding:20px;">
-            <h2 style="border-bottom:1px solid #333; padding-bottom:10px; display:flex; justify-content:space-between;">
-                <span>Live Log Viewer: <span style="color:#a964da">{log_name}</span></span>
-                <span style="font-size:0.6em; opacity:0.7">Auto-refreshing (5s)</span>
-            </h2>
-            <pre style="white-space: pre-wrap; font-size: 13px;">{content}</pre>
-            <script>window.scrollTo(0, document.body.scrollHeight);</script>
-        </body>
-    </html>
-    """
+    return render_template('error.html')
 
 def open_browser():
     try:
@@ -343,6 +345,6 @@ if __name__ == '__main__':
             threading.Thread(target=open_browser).start()
             
         logging.info(f"Starting Dashboard on port {port}")
-        app.run(host='0.0.0.0', port=port, debug=False)
+        app.run(host='0.0.0.0', port=port, debug=True)
     except Exception as e:
         logging.critical(f"Main Loop Crash: {e}", exc_info=True)

@@ -8,14 +8,14 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - TZ=America/New_York
+      - TZ=Asia/Kolkata
       - PUID=1000
       - PGID=1000
     volumes:
       # 1. DATA PERSISTENCE (FIXED)
       # Maps local ./data folder to /config inside container
       # This matches the priority logic in utils.py
-      - ./data:/config
+      - ./data:/app/data
 
       # 2. MEDIA MOUNTS
       # You can add as many lines here as you have drives/folders.

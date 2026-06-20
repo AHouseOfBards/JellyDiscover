@@ -18,19 +18,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# PLATFORM PATH SELECTION
-if IS_WINDOWS:
-    # Windows: Force ProgramData to avoid PermissionErrors in Program Files
-    DATA_DIR = os.path.join(os.environ.get('ProgramData', 'C:\\ProgramData'), 'JellyDiscover')
-elif IS_DOCKER:
-    # Docker: Check for standard /config volume first, fallback to /app/data
-    if os.path.exists('/config'):
-        DATA_DIR = '/config'
-    else:
-        DATA_DIR = os.path.join(BASE_DIR, 'data')
-else:
-    # Linux Native / Dev: Use local data folder
-    DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = os.path.join(BASE_DIR, 'data')
 
 CONFIG_PATH = os.path.join(DATA_DIR, 'config.json')
 LIBRARIES_PATH = os.path.join(DATA_DIR, 'libraries.json')
@@ -106,6 +94,17 @@ def load_libraries():
     except Exception as e:
         print(f"[!] Error loading libraries.json: {e}")
         return {}
+
+def save_libraries(library_data):
+    """Save the libraries, Duh!"""
+    try:
+        with open(LIBRARIES_PATH, "w", encoding="utf-8") as f:
+            json.dump(library_data, f, indent=4)
+            return True
+        
+    except:
+        print(f"[!] Error saving libraries.json: {e}")
+        return False
 
 # ==========================================
 # 3. DASHBOARD HELPERS

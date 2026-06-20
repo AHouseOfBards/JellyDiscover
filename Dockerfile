@@ -13,10 +13,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
 # Ensure entrypoint is copied from root or docker folder depending on your structure
-COPY docker/entrypoint.sh .
+COPY entrypoint.sh .
+
+COPY ./src/li
 
 RUN chmod +x entrypoint.sh
-RUN mkdir -p /config/JellyDiscover && chmod 777 /config/JellyDiscover
+RUN mkdir -p /app/data && chmod 777 /app/data
+
 
 ENV IS_DOCKER="true"
 ENV PYTHONUNBUFFERED=1

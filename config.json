@@ -5,7 +5,7 @@
     "SCHEDULE_FREQ": 24,
     "RUN_TIME": "04:00",
     "DASHBOARD_PORT": 5000,
-    "LOG_LEVEL": "INFO",
+    "LOG_LEVEL": "DEBUG",
     "PATH_SUBSTITUTIONS": {
         "/media/example_remote": "/mnt/local/example"
     },

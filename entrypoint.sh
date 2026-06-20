@@ -10,6 +10,11 @@ crontab /etc/cron.d/jelly-cron
 # 2. START CRON SERVICE
 cron
 
+if [ ! -f "./data/libraries.json" ]; then
+    echo "Initializing libraries.json in data volume..."
+    cp ./src/libraries.json ./data/libraries.json
+fi
+
 # 3. START DASHBOARD
 echo "Starting JellyDiscover Dashboard..."
 exec python3 src/app.py

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JellyDiscover v1.1</title>
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+
+    <div id="restartModal" class="modal" {% if get_flashed_messages()[0] == "RESTART_REQUIRED" %}style="display: block;"{% endif %}>
+        <div class="modal-content">
+            <h3>Restart Required</h3>
+            <p>You changed settings that require the service to restart.</p>
+            <div class="modal-buttons">
+                <form action="/action" method="post">
+                    <input type="hidden" name="cmd" value="restart_service">
+                    <button class="btn btn-restart">Restart Now</button>
+                </form>
+                <button class="btn" onclick="document.getElementById('restartModal').style.display='none'" style="background:#555; color:white;">Restart Later</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="logo">JellyDiscover</div>
+        <button class="nav-btn active" onclick="showTab('home')">Home</button>
+        <button class="nav-btn" onclick="showTab('config')">Configuration</button>
+        <button class="nav-btn" onclick="showTab('maintenance')">Maintenance</button>
+        <div class="footer">
+            v1.1.0<br>
+            <a href="https://github.com/AHouseOfBards/JellyDiscover" target="_blank">View on GitHub</a>
+        </div>
+    </div>
+
+    <div class="main">
+        {% with messages = get_flashed_messages() %}
+            {% if messages and messages[0] != "RESTART_REQUIRED" %}
+                <div class="flash">{{ messages[0] }}</div>
+            {% endif %}
+        {% endwith %}
+
+        {% if not last_run.success and last_run.errors %}
+        <div class="banner banner-error">
+            <div class="error-title">Discovery Issues Detected</div>
+            <div>The last run ({{ last_run.last_run }}) failed to complete successfully.</div>
+            <ul class="error-list">
+                {% for err in last_run.errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+            <div class="log-path">Log: {{ last_run.log_path }}</div>
+        </div>
+        {% endif %}
+
+        {% if not config.API_KEY or config.API_KEY == "" %}
+        <div class="banner banner-warning">
+            <div style="font-weight: bold; font-size: 18px; margin-bottom: 5px;">Setup Required</div>
+            <div>JellyDiscover cannot run because the API Key is missing. Please go to the <b>Configuration</b> tab to finish setup.</div>
+        </div>
+        {% endif %}
+
+        <div id="home" class="tab-content active">
+            <h2>System Status</h2>
+            <div class="card" style="text-align: center;">
+                <p>Status: 
+                    {% if "Running" in status %}
+                        <span class="status-badge status-running">{{ status }}</span>
+                    {% else %}
+                        <span class="status-badge status-stopped">{{ status }}</span>
+                    {% endif %}
+                </p>
+                <p><small>Platform: {{ info.os }} | Mode: {{ "Docker" if is_docker else "Standard" }}</small></p>
+                <p><small>Next Run Anchor: {{ config.RUN_TIME }}</small></p>
+                
+                <form action="/action" method="post" style="margin-top: 20px;">
+                    <input type="hidden" name="cmd" value="run_now">
+                    <button class="btn btn-run">Run Discovery Now</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="config" class="tab-content">
+            <h2>Configuration</h2>
+            <form action="/save_config" method="post">
+                <div class="card">
+                    <h3>Connection</h3>
+                    <label>Jellyfin URL</label>
+                    <input type="text" name="jellyfin_url" value="{{ config.JELLYFIN_URL }}" placeholder="http://localhost:8096">
+                    <label>API Key</label>
+                    <input type="text" name="api_key" value="{{ config.API_KEY }}">
+                    
+                    <label>Dashboard Port</label>
+                    {% if is_docker %}
+                        <input type="number" name="dashboard_port" value="{{ config.get('DASHBOARD_PORT', 5000) }}" readonly style="opacity: 0.5; cursor: not-allowed;">
+                        <span class="help-text">Port is managed by Docker. Change it in docker-compose.yml.</span>
+                    {% else %}
+                        <input type="number" name="dashboard_port" value="{{ config.get('DASHBOARD_PORT', 5000) }}">
+                        <span class="help-text">Changing this requires a service restart.</span>
+                    {% endif %}
+                </div>
+
+                <div class="card">
+                    <h3>Active Media Libraries & Environment</h3>
+                    <p style="font-size: 0.85em; color: #aaa; margin-bottom: 15px;">
+                        Select which media types JellyDiscover should generate suggestions for, and configure environment flags.
+                    </p>
+
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; cursor: pointer; font-weight: normal;">
+                        <input type="checkbox" name="lib_Movies" {% if libraries.CATEGORIES.Movies.enabled %}checked{% endif %} style="width: auto; margin: 0;">
+                        <span>Enable Movies Discovery</span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; cursor: pointer; font-weight: normal;">
+                        <input type="checkbox" name="lib_Shows" {% if libraries.CATEGORIES.Shows.enabled %}checked{% endif %} style="width: auto; margin: 0;">
+                        <span>Enable Shows Discovery</span>
+                    </label>
+
+                    <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; cursor: pointer; font-weight: normal;">
+                        <input type="checkbox" name="lib_Music" {% if libraries.CATEGORIES.Music.enabled %}checked{% endif %} style="width: auto; margin: 0;">
+                        <span>Enable Music Discovery</span>
+                    </label>
+
+                    <hr style="border: 0; border-top: 1px solid #444; margin-bottom: 15px;">
+
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: normal;">
+                        <input type="checkbox" name="use_network_drive" {% if config.USE_NETWORK_DRIVE %}checked{% endif %} style="width: auto; margin: 0;">
+                        <span style="font-weight: 600;">Enable Path Substitution Engine (Network Drive / Docker Host Cross-Mapping)</span>
+                    </label>
+                    <span class="help-text" style="margin-left: 24px; margin-top: 4px;">Must be enabled if Jellyfin runs on bare metal while this tool runs inside Docker.</span>
+                </div>
+
+                <div class="card">
+                    <h3>Automation & Performance</h3>
+                    <div style="display:flex; gap:15px; align-items: flex-start;">
+                        <div style="flex:1;">
+                            <label>Run Frequency</label>
+                            <select name="schedule_freq">
+                                <option value="12" {% if config.get('SCHEDULE_FREQ', 24) == 12 %}selected{% endif %}>Every 12 Hours</option>
+                                <option value="24" {% if config.get('SCHEDULE_FREQ', 24) == 24 %}selected{% endif %}>Daily (24h)</option>
+                                <option value="48" {% if config.get('SCHEDULE_FREQ', 24) == 48 %}selected{% endif %}>Every 2 Days (48h)</option>
+                                <option value="168" {% if config.get('SCHEDULE_FREQ', 24) == 168 %}selected{% endif %}>Weekly (7 Days)</option>
+                            </select>
+                        </div>
+                        <div style="flex:1;">
+                            <label>Anchor Time</label>
+                            <input type="time" name="run_time" value="{{ config.get('RUN_TIME', '04:00') }}">
+                        </div>
+                        <div style="flex:1;">
+                            <label>Max Threads</label>
+                            <input type="number" name="max_threads" value="{{ config.get('MAX_THREADS', 2) }}" min="1" max="16">
+                            <span class="help-text">CPU cores to use (Default: 2)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Path Substitutions</h3>
+                    <p style="font-size:0.9em; color:#aaa; margin-bottom: 15px;">
+                        Usually only needed for Docker users. Windows users should use the Installer credentials for network drives.
+                    </p>
+                    
+                    <table class="mapping-table">
+                        <thead>
+                            <tr>
+                                <th>Jellyfin Path (Remote)</th>
+                                <th>Local Path</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for remote, local in config.get('PATH_SUBSTITUTIONS', {}).items() %}
+                            <tr>
+                                <td>{{ remote }}</td>
+                                <td>{{ local }}</td>
+                                <td>
+                                    <button type="submit" name="remove_path" value="{{ remote }}" class="btn btn-danger">Remove</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr style="background: #252525;">
+                                <td><input type="text" name="new_remote_path" placeholder="/media/movies" style="margin:0;"></td>
+                                <td><input type="text" name="new_local_path" placeholder="Z:\Movies" style="margin:0;"></td>
+                                <td><small style="color:#888;">Save to Add</small></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h3>Discovery Algorithm Bias</h3>
+                    <div class="score-grid">
+                        {% for category, weights in config.SCORING.DISCOVERY_BIAS.items() %}
+                        <div class="score-item">
+                            <h4>{{ category }}</h4>
+                            {% for factor, val in weights.items() %}
+                                <label>{{ factor|capitalize }}</label>
+                                <input type="number" step="0.1" name="{{ category }}_{{ factor }}" value="{{ val }}">
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="margin-bottom: 50px;">Save Configuration</button>
+            </form>
+        </div>
+
+        <div id="maintenance" class="tab-content">
+            <h2>Maintenance</h2>
+            <div class="card">
+                <h3>Logs</h3>
+                <p>Logs are stored locally for troubleshooting.</p>
+                <div class="log-path">Location: {{ info.logs_dir }}</div>
+                
+                <br><br>
+                <a href="/logs" target="_blank" class="btn btn-primary" style="text-decoration:none; display:inline-block; width: auto; padding: 10px 20px;">
+                    View Live Logs
+                </a>
+
+                {% if last_run.log_path %}
+                <br><br><div class="log-path" style="background:#222">Latest Log: {{ last_run.log_path }}</div>
+                {% endif %}
+            </div>
+            
+            <div class="card">
+                <h3>Clean Up</h3>
+                <form action="/action" method="post">
+                    <input type="hidden" name="cmd" value="clean">
+                    <button class="btn btn-primary">Run Cleaner Utility</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="public/script.js"></script>
+</body>
+</html>
