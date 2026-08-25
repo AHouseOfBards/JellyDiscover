@@ -3,10 +3,13 @@
 > ## ⚠️ This version (1.x) is deprecated
 >
 > JellyDiscover 1.x — the standalone Python engine — is no longer maintained.
-> It has been replaced by **JellyDiscover 2.0**, a native Jellyfin plugin that
-> installs in seconds and runs inside Jellyfin itself.
+> It is being replaced by **JellyDiscover 2.0**, a native Jellyfin plugin.
 >
-> ### 👉 [Get JellyDiscover 2.0](https://github.com/AHouseOfBards/JellyDiscover/releases/tag/v2.0.0-beta)
+> **2.0 is currently in early alpha** — the algorithm is tested but the plugin
+> has never been run on a live Jellyfin server. Do not use it on a production
+> instance yet.
+>
+> ### 👉 [JellyDiscover 2.0 Alpha](https://github.com/AHouseOfBards/JellyDiscover/releases/tag/v2.0.0-beta)
 >
 > **Source code:** [`v2.0-plugin` branch](https://github.com/AHouseOfBards/JellyDiscover/tree/v2.0-plugin)
 
