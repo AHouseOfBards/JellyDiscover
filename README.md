@@ -10,10 +10,11 @@ visible only to them, refreshed as they watch. Because a library is a server-sid
 it renders on every client — web, Android TV, Roku, Swiftfin, Kodi — with no client-side
 support required.
 
-> **Pre-release.** The recommendation core is covered by 50 tests that run in under a
-> second. The Jellyfin integration layer compiles against 10.11.5 but is still being
-> validated against live servers. Back up your Jellyfin config before installing, or test
-> on a non-production instance.
+> **⚠️ Alpha — not yet tested against a live server.** The recommendation algorithm is
+> covered by 50 unit tests, but the Jellyfin integration layer has **never been run on an
+> actual server**. Expect rough edges, missing error handling, and possible breakage.
+> **Do not install this on a production Jellyfin instance.** Use a test server or snapshot
+> your config directory first.
 
 ---
 
@@ -84,8 +85,9 @@ diversity.
 
 ## Before you install
 
-**Back up first.** This is a pre-release. Snapshot your Jellyfin `config` directory, or
-test on a non-production instance.
+**This is alpha software.** It compiles, the algorithm passes its tests, but it has never
+been loaded into a running Jellyfin server. There will be bugs. Back up your Jellyfin
+`config` directory, or — better — test on a throwaway instance.
 
 What it will do on your server:
 
