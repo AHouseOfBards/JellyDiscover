@@ -18,26 +18,20 @@ support required.
 
 ---
 
-## Why a rewrite?
+## What's different in 2.0
 
-JellyDiscover 1.x was a standalone Python app that drove Jellyfin over HTTP. It worked, but
-had fundamental architectural problems — it managed Jellyfin state without keeping any
-record of what it had created, re-deriving its own identity on every run by
-substring-matching library names and file paths.
+JellyDiscover now runs as a native Jellyfin plugin instead of a standalone app. No separate
+installer, no external dashboard, no path mapping — it lives inside Jellyfin and uses the
+same APIs, filesystem, and authentication that Jellyfin itself does.
 
-Running as a native plugin eliminates the entire delivery layer — the 229 MB installer,
-Windows service, Flask dashboard on port 5000, the scheduler, and path substitution.
-
-| | 1.x (Python) | 2.0 (plugin) |
-|---|---|---|
-| Install | 229 MB installer, admin rights, Windows password | Paste a repo URL, click install |
-| Payload | 3 bundled executables | 2 DLLs, 174 KB |
-| Config UI | Flask on `:5000`, **no authentication** | Jellyfin dashboard, admin auth inherited |
-| Scheduling | thread comparing `HH:MM` strings | Jellyfin's own task scheduler |
-| Item ceiling | first **600** items, unsorted, unpaged | the entire catalogue |
-| Path substitution | required, and inverted (broke playback) | cannot exist — same process, same filesystem |
-| Identity | library **list index**, mangled display name | a stored registry, keyed on user id |
-| Uninstall | *"you must delete the libraries manually"* | one button, plus a best-effort hook |
+| | What you get |
+|---|---|
+| **Install** | Paste a repo URL in the Jellyfin dashboard, click install |
+| **Size** | 2 DLLs, 174 KB total |
+| **Config** | Built into the Jellyfin dashboard, inherits admin auth |
+| **Scheduling** | Uses Jellyfin's own task scheduler |
+| **Catalogue** | Processes your entire library, not a capped subset |
+| **Uninstall** | One button to remove everything, plus a safety-net uninstall hook |
 
 ---
 
@@ -46,7 +40,7 @@ Windows service, Flask dashboard on port 5000, the scheduler, and path substitut
 Five stages, all in `JellyDiscover.Core`, which has **zero dependencies** — no Jellyfin,
 no I/O, no clock. That is what makes the whole algorithm testable in milliseconds.
 
-**1 · Signals.** Labels come from data 1.x downloaded on every run and never read:
+**1 · Signals.** Labels are derived from your Jellyfin watch data:
 
 | Label | From |
 |---|---|
@@ -74,8 +68,7 @@ slider cannot express. **There are no bias sliders in the UI**; there is nothing
 
 **4 · List construction.** Maximal Marginal Relevance for genuine variety
 (`λ·score − (1−λ)·maxSimilarityToAlreadyPicked`), plus calibration toward the user's own
-genre mix. 1.x added `random.uniform(0, diversity)` to every score, which is noise, not
-diversity.
+genre mix.
 
 **5 · Explanation.** Scoring against individual liked items (rather than one averaged
 "vibe vector") means the plugin knows *which* item drove each match — so it can say
@@ -120,26 +113,24 @@ There are three teardown paths because Jellyfin cannot guarantee any single one 
 
 **The reliable one:** config page → **Remove all JellyDiscover libraries**. This revokes
 the user permissions, removes the virtual folders, and deletes the generated content — in
-that order, so no user policy is ever left pointing at a deleted library (which is what
-produced "ghost items" in 1.x). Do this **before** uninstalling.
+that order, so no user policy is ever left pointing at a deleted library. Do this
+**before** uninstalling.
 
 Also available: disabling a media type removes just those libraries; the `OnUninstalling`
 hook attempts a full teardown as a safety net. Every path is idempotent — if one dies
 half-way, running it again finishes the job.
 
-### Removing libraries left by JellyDiscover 1.x
+### Removing libraries left by a previous version
 
 Config page → **Preview what would be removed**. Nothing is deleted until you confirm.
 
-Matching is on the exact invisible-character naming scheme 1.x generated (`U+3164` prefix,
-one or more `U+200B` suffixes) — **never** on words like "Discover" or "Recommended". That
-keyword match is precisely what made the old cleaner destroy hand-made libraries such as
-"Recommended Classics", and the predicate is covered by tests that assert it does not match
-any of them.
+Matching uses the exact invisible-character naming scheme from the old version (`U+3164`
+prefix, one or more `U+200B` suffixes) — **never** broad keywords like "Discover" or
+"Recommended", so your hand-made libraries are safe. The matching predicate is covered by
+tests.
 
-Old *content folders* are deliberately left on disk. They live outside this plugin's data
-root and a stray recursive delete there is the exact failure this rewrite exists to prevent.
-The preview shows their paths so you can remove them yourself.
+Old content folders on disk are deliberately left alone. The preview shows their paths so
+you can remove them yourself.
 
 ---
 
@@ -181,4 +172,4 @@ probably belongs in the plugin project.
 
 ## Licence
 
-MIT, as with 1.x. Jellyfin plugins must be GPLv3 or permissive; MIT satisfies that.
+MIT. Jellyfin plugins must be GPLv3 or permissive; MIT satisfies that.
