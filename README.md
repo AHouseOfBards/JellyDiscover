@@ -17,20 +17,17 @@
 
 ## What changed?
 
-JellyDiscover 2.0 is a complete ground-up rewrite — not a port of the Python
-code. It runs as a native Jellyfin plugin instead of a standalone app, which
-eliminates the installer, the Flask dashboard on port 5000, path substitution,
-and the Windows service.
+JellyDiscover 2.0 is a complete rewrite as a native Jellyfin plugin. No separate
+installer, no external dashboard, no path mapping — it lives inside Jellyfin.
 
-| | 1.x (Python, deprecated) | 2.0 (Jellyfin plugin) |
-|---|---|---|
-| Install | 229 MB installer, admin rights | Paste a repo URL, click install |
-| Payload | 3 bundled executables | 2 DLLs, 174 KB |
-| Config UI | Flask on `:5000`, **no authentication** | Jellyfin dashboard, admin auth inherited |
-| Scheduling | thread comparing `HH:MM` strings | Jellyfin's own task scheduler |
-| Item ceiling | first 600 items, unsorted, unpaged | entire catalogue |
-| Path substitution | required, and inverted | cannot exist — same process |
-| Uninstall | manual library cleanup | one button, plus uninstall hook |
+| | What you get |
+|---|---|
+| **Install** | Paste a repo URL in the Jellyfin dashboard, click install |
+| **Size** | 2 DLLs, 174 KB total |
+| **Config** | Built into the Jellyfin dashboard, inherits admin auth |
+| **Scheduling** | Uses Jellyfin's own task scheduler |
+| **Catalogue** | Processes your entire library |
+| **Uninstall** | One button to remove everything, plus a safety-net uninstall hook |
 
 ---
 
