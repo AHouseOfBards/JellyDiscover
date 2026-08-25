@@ -1,29 +1,31 @@
-# JellyDiscover 2.0 — Jellyfin plugin (beta)
+# JellyDiscover
 
-Personalised recommendation libraries for every user on your server, generated inside
-Jellyfin instead of alongside it.
+Personalised recommendation libraries for every user on your Jellyfin server.
+
+JellyDiscover 2.0 is a **complete rewrite** — now a native Jellyfin plugin instead of a
+standalone Python app. It replaces the deprecated 1.x engine entirely.
 
 Each user gets their own **Discover Movies / Discover Shows / Discover Music** library,
 visible only to them, refreshed as they watch. Because a library is a server-side object,
 it renders on every client — web, Android TV, Roku, Swiftfin, Kodi — with no client-side
 support required.
 
-> **This is a beta.** The recommendation core is covered by 50 tests that run in under a
-> second. The Jellyfin integration layer compiles against 10.11.5 but **has not yet been
-> run against a live server.** Read [Before you install](#before-you-install).
+> **Pre-release.** The recommendation core is covered by 50 tests that run in under a
+> second. The Jellyfin integration layer compiles against 10.11.5 but is still being
+> validated against live servers. Back up your Jellyfin config before installing, or test
+> on a non-production instance.
 
 ---
 
-## Why this is a rewrite, not a port
+## Why a rewrite?
 
-JellyDiscover 1.x was a standalone Python app that drove Jellyfin over HTTP. A review of it
-found 29 defects, five of which could damage a user's server. Nearly all of them came from
-one structural problem: **it managed Jellyfin state without keeping any record of what it
-had created**, so every run it re-derived its own identity by substring-matching library
-names and file paths.
+JellyDiscover 1.x was a standalone Python app that drove Jellyfin over HTTP. It worked, but
+had fundamental architectural problems — it managed Jellyfin state without keeping any
+record of what it had created, re-deriving its own identity on every run by
+substring-matching library names and file paths.
 
-Running as a plugin deletes the entire delivery layer — installer, Windows service, port
-5000, the unauthenticated dashboard, the scheduler, and path substitution.
+Running as a native plugin eliminates the entire delivery layer — the 229 MB installer,
+Windows service, Flask dashboard on port 5000, the scheduler, and path substitution.
 
 | | 1.x (Python) | 2.0 (plugin) |
 |---|---|---|
@@ -82,8 +84,8 @@ diversity.
 
 ## Before you install
 
-**Back up first.** This is a beta that has not yet run against a live server. Snapshot your
-Jellyfin `config` directory, or test on a non-production instance.
+**Back up first.** This is a pre-release. Snapshot your Jellyfin `config` directory, or
+test on a non-production instance.
 
 What it will do on your server:
 
