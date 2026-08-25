@@ -1,0 +1,13 @@
+{
+    "category": "General",
+    "guid": "6f1a7c48-2b3d-4a91-9d0e-5c7b8e2f4a11",
+    "name": "JellyDiscover",
+    "overview": "Personalised recommendation libraries for every user.",
+    "description": "Generates a per-user discovery library for Movies, Shows and Music, visible only to that user and refreshed as they watch. Learns each user's weights from their own history, including what they abandoned.",
+    "owner": "AHouseOfBards",
+    "targetAbi": "10.11.5.0",
+    "framework": "net9.0",
+    "version": "2.0.0.0",
+    "changelog": "First public beta of the plugin rewrite.",
+    "timestamp": "2026-08-25T00:00:00Z"
+}

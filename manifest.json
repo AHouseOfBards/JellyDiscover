@@ -1,0 +1,20 @@
+[
+  {
+    "guid": "6f1a7c48-2b3d-4a91-9d0e-5c7b8e2f4a11",
+    "name": "JellyDiscover",
+    "description": "Generates a per-user discovery library for Movies, Shows and Music, visible only to that user and refreshed as they watch. Learns each user's weights from their own history, including what they abandoned.",
+    "overview": "Personalised recommendation libraries for every user.",
+    "owner": "AHouseOfBards",
+    "category": "General",
+    "versions": [
+      {
+        "version": "2.0.0.0",
+        "changelog": "First public beta of the plugin rewrite. Complete ground-up rewrite from Python standalone to native Jellyfin plugin.",
+        "targetAbi": "10.11.5.0",
+        "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.0.0-beta/jellydiscover_2.0.0.0.zip",
+        "checksum": "DFF7BBBD789384CBE54914B2ED42C93C",
+        "timestamp": "2026-08-25T00:00:00Z"
+      }
+    ]
+  }
+]

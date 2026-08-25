@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Deliberately dependency-free.
+
+    This project holds the entire recommendation algorithm and must never
+    reference Jellyfin, ASP.NET, a database, the filesystem, or the clock.
+    That is what makes it testable in milliseconds and portable if the host
+    ever changes. If you find yourself wanting to add a PackageReference
+    here, the code you are writing probably belongs in the plugin project.
+  -->
+  <PropertyGroup>
+    <RootNamespace>JellyDiscover.Core</RootNamespace>
+    <AssemblyName>JellyDiscover.Core</AssemblyName>
+  </PropertyGroup>
+</Project>

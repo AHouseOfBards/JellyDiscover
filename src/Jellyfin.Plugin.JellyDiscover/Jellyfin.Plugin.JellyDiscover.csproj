@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Jellyfin.Plugin.JellyDiscover</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.JellyDiscover</AssemblyName>
+    <!--
+      Jellyfin plugins are loaded into a per-plugin AssemblyLoadContext. Publishing the
+      full output (including the deps file) is what lets that context resolve private
+      dependencies - notably any future native ones such as ONNX Runtime.
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 10.11.5 is the declared minimum supported server. -->
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../JellyDiscover.Core/JellyDiscover.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration/configPage.html" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JellyDiscover</title>
+</head>
+<body>
+<div id="JellyDiscoverConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-controller="__plugin/JellyDiscover/configPage.js">
+    <div data-role="content">
+        <div class="content-primary">
+
+            <form id="jdConfigForm">
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Libraries</h2>
+                    <p class="fieldDescription">
+                        One discovery library per user, per enabled type. Each is visible only to
+                        the user it belongs to.
+                    </p>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdEnableMovies" />
+                        <span>Movies</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdEnableShows" />
+                        <span>Shows</span>
+                    </label>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdEnableMusic" />
+                        <span>Music</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Music uses symbolic links, because Jellyfin does not play
+                        <code>.strm</code> files in music libraries. On Windows this needs
+                        Developer Mode or a service account with the privilege.
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="jdCount" min="5" max="100"
+                               label="Recommendations per library" />
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Behaviour</h2>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdRefreshOnWatch" />
+                        <span>Update a user's libraries after they watch something</span>
+                    </label>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="jdDebounce" min="1" max="120"
+                               label="Wait this many minutes after activity before refreshing" />
+                        <div class="fieldDescription">
+                            Playback events fire constantly. This coalesces a whole session into
+                            a single refresh.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="jdDiversity" min="0" max="1" step="0.01"
+                               label="Relevance vs variety (1.00 = pure relevance)" />
+                        <div class="fieldDescription">
+                            Lower values trade a little predicted relevance for a more varied list.
+                            There are no per-genre weight sliders: the ranker learns each user's
+                            weights from their own history.
+                        </div>
+                    </div>
+
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdWriteNfo" />
+                        <span>Write .nfo files with provider IDs (recommended)</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Lets Jellyfin identify generated entries by exact TMDB/IMDb id instead of
+                        guessing from a folder name.
+                    </div>
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+
+            <div class="verticalSection">
+                <h2 class="sectionTitle">Maintenance</h2>
+
+                <button is="emby-button" type="button" id="jdRun" class="raised block">
+                    <span>Generate now</span>
+                </button>
+
+                <br />
+                <h3>Libraries from JellyDiscover 1.x (Python)</h3>
+                <p class="fieldDescription">
+                    Finds libraries created by the old standalone app. Matching is on the exact
+                    invisible-character naming scheme it used, never on words like "Discover" or
+                    "Recommended" — that keyword match is what made the old cleaner delete
+                    hand-made libraries. Preview first; nothing is removed until you confirm.
+                </p>
+                <button is="emby-button" type="button" id="jdLegacyPreview" class="raised block">
+                    <span>Preview what would be removed</span>
+                </button>
+                <button is="emby-button" type="button" id="jdLegacyApply" class="raised block" disabled>
+                    <span>Remove them</span>
+                </button>
+                <pre id="jdLegacyOut" style="white-space:pre-wrap;"></pre>
+
+                <br />
+                <h3>Remove everything</h3>
+                <p class="fieldDescription">
+                    Removes every library this plugin created, revokes the matching user
+                    permissions, and deletes the generated folders. <strong>Run this before
+                    uninstalling</strong> — Jellyfin cannot guarantee a plugin's uninstall hook
+                    executes, so this is the reliable path.
+                </p>
+                <button is="emby-button" type="button" id="jdRemoveAll" class="raised block button-delete">
+                    <span>Remove all JellyDiscover libraries</span>
+                </button>
+                <pre id="jdStatusOut" style="white-space:pre-wrap;"></pre>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '6f1a7c48-2b3d-4a91-9d0e-5c7b8e2f4a11';
+
+            function page() {
+                return document.querySelector('#JellyDiscoverConfigPage');
+            }
+
+            function url(path) {
+                return ApiClient.getUrl('JellyDiscover/' + path);
+            }
+
+            function show(id, value) {
+                page().querySelector(id).textContent =
+                    typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+            }
+
+            document.querySelector('#JellyDiscoverConfigPage')
+                .addEventListener('pageshow', function () {
+                    Dashboard.showLoadingMsg();
+                    ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                        var p = page();
+                        p.querySelector('#jdEnableMovies').checked = config.EnableMovies;
+                        p.querySelector('#jdEnableShows').checked = config.EnableShows;
+                        p.querySelector('#jdEnableMusic').checked = config.EnableMusic;
+                        p.querySelector('#jdCount').value = config.RecommendationCount;
+                        p.querySelector('#jdRefreshOnWatch').checked = config.RefreshOnWatch;
+                        p.querySelector('#jdDebounce').value = config.RefreshDebounceMinutes;
+                        p.querySelector('#jdDiversity').value = config.DiversityLambda;
+                        p.querySelector('#jdWriteNfo').checked = config.WriteNfoFiles;
+                        Dashboard.hideLoadingMsg();
+                    });
+                });
+
+            document.querySelector('#jdConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    var p = page();
+                    config.EnableMovies = p.querySelector('#jdEnableMovies').checked;
+                    config.EnableShows = p.querySelector('#jdEnableShows').checked;
+                    config.EnableMusic = p.querySelector('#jdEnableMusic').checked;
+                    config.RecommendationCount = parseInt(p.querySelector('#jdCount').value, 10);
+                    config.RefreshOnWatch = p.querySelector('#jdRefreshOnWatch').checked;
+                    config.RefreshDebounceMinutes = parseInt(p.querySelector('#jdDebounce').value, 10);
+                    config.DiversityLambda = parseFloat(p.querySelector('#jdDiversity').value);
+                    config.WriteNfoFiles = p.querySelector('#jdWriteNfo').checked;
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                return false;
+            });
+
+            document.querySelector('#jdRun').addEventListener('click', function () {
+                ApiClient.ajax({ type: 'POST', url: url('Run') }).then(function () {
+                    Dashboard.alert('Generation started. Watch Scheduled Tasks for progress.');
+                });
+            });
+
+            document.querySelector('#jdLegacyPreview').addEventListener('click', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.ajax({ type: 'GET', url: url('Legacy'), dataType: 'json' })
+                    .then(function (result) {
+                        Dashboard.hideLoadingMsg();
+                        show('#jdLegacyOut', result);
+                        page().querySelector('#jdLegacyApply').disabled = result.Count === 0;
+                    });
+            });
+
+            document.querySelector('#jdLegacyApply').addEventListener('click', function () {
+                Dashboard.confirm(
+                    'Remove the previewed 1.x libraries? Their content folders are left on disk.',
+                    'Remove legacy libraries',
+                    function (confirmed) {
+                        if (!confirmed) { return; }
+                        Dashboard.showLoadingMsg();
+                        ApiClient.ajax({ type: 'POST', url: url('Legacy/Apply'), dataType: 'json' })
+                            .then(function (result) {
+                                Dashboard.hideLoadingMsg();
+                                show('#jdLegacyOut', result);
+                            });
+                    });
+            });
+
+            document.querySelector('#jdRemoveAll').addEventListener('click', function () {
+                Dashboard.confirm(
+                    'Remove every library JellyDiscover created, and delete its generated content?',
+                    'Remove everything',
+                    function (confirmed) {
+                        if (!confirmed) { return; }
+                        Dashboard.showLoadingMsg();
+                        ApiClient.ajax({
+                            type: 'POST',
+                            url: url('RemoveEverything?dropLocalState=false'),
+                            dataType: 'json'
+                        }).then(function (result) {
+                            Dashboard.hideLoadingMsg();
+                            show('#jdStatusOut', result);
+                        });
+                    });
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
