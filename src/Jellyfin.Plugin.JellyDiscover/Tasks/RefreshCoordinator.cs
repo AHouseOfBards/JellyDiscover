@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using Jellyfin.Plugin.JellyDiscover.Data;
 using Jellyfin.Plugin.JellyDiscover.Integration;
+using Jellyfin.Plugin.JellyDiscover.Integration.External;
+using JellyDiscover.Core.Collaborative;
 using JellyDiscover.Core.Models;
 using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +30,7 @@ public sealed class RefreshCoordinator : BackgroundService
     private readonly CatalogueReader _reader;
     private readonly LibrarySynchronizer _synchronizer;
     private readonly DiscoveryStore _store;
+    private readonly ExternalSignalService _external;
     private readonly ILogger<RefreshCoordinator> _logger;
 
     public RefreshCoordinator(
@@ -35,12 +38,14 @@ public sealed class RefreshCoordinator : BackgroundService
         CatalogueReader reader,
         LibrarySynchronizer synchronizer,
         DiscoveryStore store,
+        ExternalSignalService external,
         ILogger<RefreshCoordinator> logger)
     {
         _userManager = userManager;
         _reader = reader;
         _synchronizer = synchronizer;
         _store = store;
+        _external = external;
         _logger = logger;
     }
 
@@ -64,62 +69,122 @@ public sealed class RefreshCoordinator : BackgroundService
     /// <summary>Refreshes every user. Used by the scheduled task and by manual runs.</summary>
     public async Task RefreshAllAsync(IProgress<double>? progress, CancellationToken cancellationToken)
     {
-        var configuration = Plugin.Instance?.Configuration;
-        if (configuration is null || configuration.Suspended)
+        var context = await BuildContextAsync(null, cancellationToken).ConfigureAwait(false);
+        if (context is null)
         {
-            return;
-        }
-
-        var kinds = LibrarySynchronizer.EnabledKinds(configuration);
-        if (kinds.Count == 0)
-        {
-            _logger.LogInformation("No media kinds enabled; nothing to do");
             return;
         }
 
         var users = _userManager.Users.ToArray();
-        var raw = _reader.ReadRawCatalogue(kinds);
-
-        // One pass, shared across every user, rather than 1.x's per-user popularity scan.
-        var plays = _reader.CountServerPlays(users, raw);
-        var catalogue = _reader.ToCatalogue(raw, plays);
-
         _logger.LogInformation(
-            "Refreshing {UserCount} users against {ItemCount} items", users.Length, catalogue.Count);
+            "Refreshing {UserCount} users against {ItemCount} items (collaborative {State})",
+            users.Length,
+            context.Catalogue.Count,
+            context.CoOccurrence.IsActive ? "active" : "inactive");
 
         for (var i = 0; i < users.Length; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await SafeSynchronizeAsync(users[i], raw, catalogue, cancellationToken).ConfigureAwait(false);
+            await SafeSynchronizeAsync(users[i], context, cancellationToken).ConfigureAwait(false);
             progress?.Report((i + 1) * 100.0 / users.Length);
         }
     }
 
     private async Task RefreshOneAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var configuration = Plugin.Instance?.Configuration;
-        if (configuration is null)
-        {
-            return;
-        }
-
         var user = _userManager.GetUserById(userId);
         if (user is null)
         {
             return;
         }
 
-        var kinds = LibrarySynchronizer.EnabledKinds(configuration);
-        if (kinds.Count == 0)
+        var context = await BuildContextAsync(user.Id, cancellationToken).ConfigureAwait(false);
+        if (context is null)
         {
             return;
         }
 
-        var raw = _reader.ReadRawCatalogue(kinds);
-        var plays = _reader.CountServerPlays([user], raw);
-        var catalogue = _reader.ToCatalogue(raw, plays);
+        await SafeSynchronizeAsync(user, context, cancellationToken).ConfigureAwait(false);
+    }
 
-        await SafeSynchronizeAsync(user, raw, catalogue, cancellationToken).ConfigureAwait(false);
+    /// <summary>
+    /// Everything shared across users, computed once: the catalogue, popularity, the
+    /// co-watch index, and the external services. 1.x repeated all of this per user.
+    /// </summary>
+    private async Task<RefreshContext?> BuildContextAsync(
+        Guid? singleUser,
+        CancellationToken cancellationToken)
+    {
+        var configuration = Plugin.Instance?.Configuration;
+        if (configuration is null || configuration.Suspended)
+        {
+            return null;
+        }
+
+        var kinds = LibrarySynchronizer.EnabledKinds(configuration);
+        if (kinds.Count == 0)
+        {
+            _logger.LogInformation("No media kinds enabled; nothing to do");
+            return null;
+        }
+
+        var allUsers = _userManager.Users.ToArray();
+        var raw = _reader.ReadRawCatalogue(kinds);
+
+        // Popularity is cheap to scope down for a single-user refresh, but the co-watch
+        // index is inherently server-wide and must see everyone to mean anything.
+        var playCountUsers = singleUser is { } id
+            ? allUsers.Where(u => u.Id == id).ToArray()
+            : allUsers;
+
+        var plays = _reader.CountServerPlays(playCountUsers, raw);
+        var catalogue = _reader.ToCatalogue(raw, plays);
+        var lookup = ProviderIdLookup.Build(catalogue);
+
+        var shared = await _external
+            .GetSharedAsync(configuration, lookup, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new RefreshContext
+        {
+            RawCatalogue = raw,
+            Catalogue = catalogue,
+            Configuration = configuration,
+            ProviderIds = lookup,
+            Shared = shared,
+            CoOccurrence = BuildCoOccurrence(allUsers, raw),
+        };
+    }
+
+    private CoOccurrenceIndex BuildCoOccurrence(
+        IReadOnlyList<Jellyfin.Database.Implementations.Entities.User> users,
+        IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> raw)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var sets = new List<IReadOnlyCollection<string>>(users.Count);
+
+        foreach (var user in users)
+        {
+            var liked = _reader.ReadHistory(user, raw, now)
+                .Where(i => i.IsPositive)
+                .Select(i => i.ItemId)
+                .ToArray();
+
+            if (liked.Length >= 2)
+            {
+                sets.Add(liked);
+            }
+        }
+
+        var index = CoOccurrenceIndex.Build(sets);
+        if (!index.IsActive)
+        {
+            _logger.LogDebug(
+                "Collaborative signal inactive: {Users} contributing users is below the threshold",
+                index.UserCount);
+        }
+
+        return index;
     }
 
     /// <summary>
@@ -128,14 +193,13 @@ public sealed class RefreshCoordinator : BackgroundService
     /// </summary>
     private async Task SafeSynchronizeAsync(
         Jellyfin.Database.Implementations.Entities.User user,
-        IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> raw,
-        IReadOnlyList<CatalogItem> catalogue,
+        RefreshContext context,
         CancellationToken cancellationToken)
     {
         try
         {
             await _synchronizer
-                .SynchronizeUserAsync(user, raw, catalogue, Plugin.Instance!.Configuration, cancellationToken)
+                .SynchronizeUserAsync(user, context, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)

@@ -1,3 +1,4 @@
+using JellyDiscover.Core.Collaborative;
 using JellyDiscover.Core.Models;
 using JellyDiscover.Core.Text;
 
@@ -28,12 +29,17 @@ public sealed record ExtractedFeatures(double[] Values, CatalogItem? NearestLike
 public sealed class FeatureExtractor
 {
     private readonly Bm25Index _index;
+    private readonly CoOccurrenceIndex _coOccurrence;
     private readonly int _maxServerPlays;
 
-    public FeatureExtractor(Bm25Index index, int maxServerPlays = 1)
+    public FeatureExtractor(
+        Bm25Index index,
+        int maxServerPlays = 1,
+        CoOccurrenceIndex? coOccurrence = null)
     {
         ArgumentNullException.ThrowIfNull(index);
         _index = index;
+        _coOccurrence = coOccurrence ?? CoOccurrenceIndex.Empty;
         _maxServerPlays = Math.Max(1, maxServerPlays);
     }
 
@@ -113,6 +119,12 @@ public sealed class FeatureExtractor
             && profile.Collections.Contains(candidate.CollectionName)
                 ? 1.0
                 : 0.0;
+
+        // --- Collaborative signal -------------------------------------------------------
+        // Zero on servers too small to support it, so the learned weight simply never
+        // finds anything to attach to rather than the feature inventing a relationship.
+        x[FeatureNames.IndexOf(FeatureNames.CollaborativeAffinity)] =
+            Clamp01(_coOccurrence.AffinityTo(candidate.Id, profile.Liked.Select(l => l.Item.Id)));
 
         // --- Item priors ---------------------------------------------------------------
         x[FeatureNames.IndexOf(FeatureNames.CommunityRating)] =

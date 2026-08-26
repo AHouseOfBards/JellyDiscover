@@ -1,3 +1,4 @@
+using JellyDiscover.Core.Collaborative;
 using JellyDiscover.Core.Features;
 using JellyDiscover.Core.Models;
 using JellyDiscover.Core.Ranking;
@@ -18,6 +19,12 @@ public sealed record RecommendationRequest
     public IReadOnlySet<string> ExcludedItemIds { get; init; } = new HashSet<string>();
 
     public ExternalSignals External { get; init; } = ExternalSignals.None;
+
+    /// <summary>
+    /// Server-wide co-watch signal, built once per refresh and shared across users.
+    /// Null or inactive on servers too small to support it.
+    /// </summary>
+    public CoOccurrenceIndex? CoOccurrence { get; init; }
 
     /// <summary>Weights from the previous run, so a user's model improves over time
     /// instead of being refit from scratch on every pass.</summary>
@@ -68,7 +75,7 @@ public sealed class Recommender
         // ---- Item representation. IDF comes from this server's actual library. --------
         var index = Bm25Index.Build(catalogue);
         var maxPlays = catalogue.Count == 0 ? 1 : catalogue.Max(i => i.ServerPlayCount);
-        var extractor = new FeatureExtractor(index, maxPlays);
+        var extractor = new FeatureExtractor(index, maxPlays, request.CoOccurrence);
 
         var profile = TasteProfileBuilder.Build(request.History, byId);
 

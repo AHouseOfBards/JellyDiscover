@@ -39,6 +39,7 @@ public sealed record FeatureContribution(string Feature, double Value, double We
         FeatureNames.DirectorAffinity => "From a director you follow",
         FeatureNames.ActorAffinity => "Features actors you watch",
         FeatureNames.CollectionContinuation => "Continues a collection you started",
+        FeatureNames.CollaborativeAffinity => "People who watch what you watch also watch this",
         FeatureNames.CommunityRating => "Highly rated",
         FeatureNames.ServerPopularity => "Popular on this server",
         FeatureNames.EraAffinity => "From an era you favour",

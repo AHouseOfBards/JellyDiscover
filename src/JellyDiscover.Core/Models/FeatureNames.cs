@@ -16,6 +16,7 @@ public static class FeatureNames
     public const string DirectorAffinity = "person.director";
     public const string ActorAffinity = "person.actor";
     public const string CollectionContinuation = "collection.continuation";
+    public const string CollaborativeAffinity = "collaborative.affinity";
     public const string CommunityRating = "rating.community";
     public const string EraAffinity = "era.affinity";
     public const string RuntimeFit = "runtime.fit";
@@ -38,6 +39,7 @@ public static class FeatureNames
         DirectorAffinity,
         ActorAffinity,
         CollectionContinuation,
+        CollaborativeAffinity,
         CommunityRating,
         EraAffinity,
         RuntimeFit,

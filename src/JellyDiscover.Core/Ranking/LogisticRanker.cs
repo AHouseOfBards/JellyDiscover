@@ -25,7 +25,8 @@ public sealed record LogisticOptions
 /// </summary>
 public sealed record RankerWeights
 {
-    public const int CurrentVersion = 1;
+    // v2: added genre.blend and collaborative.affinity to the feature vector.
+    public const int CurrentVersion = 2;
 
     public required double[] Values { get; init; }
 
@@ -51,6 +52,7 @@ public sealed record RankerWeights
         w[FeatureNames.IndexOf(FeatureNames.DirectorAffinity)] = 0.9;
         w[FeatureNames.IndexOf(FeatureNames.ActorAffinity)] = 0.5;
         w[FeatureNames.IndexOf(FeatureNames.CollectionContinuation)] = 1.1;
+        w[FeatureNames.IndexOf(FeatureNames.CollaborativeAffinity)] = 1.6;
         w[FeatureNames.IndexOf(FeatureNames.CommunityRating)] = 0.9;
         w[FeatureNames.IndexOf(FeatureNames.EraAffinity)] = 0.3;
         w[FeatureNames.IndexOf(FeatureNames.RuntimeFit)] = 0.2;

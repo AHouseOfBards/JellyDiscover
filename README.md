@@ -1,37 +1,40 @@
-# JellyDiscover
+# JellyDiscover 2.0 — Jellyfin plugin (beta)
 
-Personalised recommendation libraries for every user on your Jellyfin server.
-
-JellyDiscover 2.0 is a **complete rewrite** — now a native Jellyfin plugin instead of a
-standalone Python app. It replaces the deprecated 1.x engine entirely.
+Personalised recommendation libraries for every user on your server, generated inside
+Jellyfin instead of alongside it.
 
 Each user gets their own **Discover Movies / Discover Shows / Discover Music** library,
 visible only to them, refreshed as they watch. Because a library is a server-side object,
 it renders on every client — web, Android TV, Roku, Swiftfin, Kodi — with no client-side
 support required.
 
-> **⚠️ Alpha — not yet tested against a live server.** The recommendation algorithm is
-> covered by 50 unit tests, but the Jellyfin integration layer has **never been run on an
-> actual server**. Expect rough edges, missing error handling, and possible breakage.
-> **Do not install this on a production Jellyfin instance.** Use a test server or snapshot
-> your config directory first.
+> **This is a beta.** The recommendation core is covered by 58 tests that run in under a
+> second. The Jellyfin integration layer compiles against 10.11.5 but **has not yet been
+> run against a live server.** Read [Before you install](#before-you-install).
 
 ---
 
-## What's different in 2.0
+## Why this is a rewrite, not a port
 
-JellyDiscover now runs as a native Jellyfin plugin instead of a standalone app. No separate
-installer, no external dashboard, no path mapping — it lives inside Jellyfin and uses the
-same APIs, filesystem, and authentication that Jellyfin itself does.
+JellyDiscover 1.x was a standalone Python app that drove Jellyfin over HTTP. A review of it
+found 29 defects, five of which could damage a user's server. Nearly all of them came from
+one structural problem: **it managed Jellyfin state without keeping any record of what it
+had created**, so every run it re-derived its own identity by substring-matching library
+names and file paths.
 
-| | What you get |
-|---|---|
-| **Install** | Paste a repo URL in the Jellyfin dashboard, click install |
-| **Size** | 2 DLLs, 174 KB total |
-| **Config** | Built into the Jellyfin dashboard, inherits admin auth |
-| **Scheduling** | Uses Jellyfin's own task scheduler |
-| **Catalogue** | Processes your entire library, not a capped subset |
-| **Uninstall** | One button to remove everything, plus a safety-net uninstall hook |
+Running as a plugin deletes the entire delivery layer — installer, Windows service, port
+5000, the unauthenticated dashboard, the scheduler, and path substitution.
+
+| | 1.x (Python) | 2.0 (plugin) |
+|---|---|---|
+| Install | 229 MB installer, admin rights, Windows password | Paste a repo URL, click install |
+| Payload | 3 bundled executables | 2 DLLs, 174 KB |
+| Config UI | Flask on `:5000`, **no authentication** | Jellyfin dashboard, admin auth inherited |
+| Scheduling | thread comparing `HH:MM` strings | Jellyfin's own task scheduler |
+| Item ceiling | first **600** items, unsorted, unpaged | the entire catalogue |
+| Path substitution | required, and inverted (broke playback) | cannot exist — same process, same filesystem |
+| Identity | library **list index**, mangled display name | a stored registry, keyed on user id |
+| Uninstall | *"you must delete the libraries manually"* | one button, plus a best-effort hook |
 
 ---
 
@@ -40,7 +43,7 @@ same APIs, filesystem, and authentication that Jellyfin itself does.
 Five stages, all in `JellyDiscover.Core`, which has **zero dependencies** — no Jellyfin,
 no I/O, no clock. That is what makes the whole algorithm testable in milliseconds.
 
-**1 · Signals.** Labels are derived from your Jellyfin watch data:
+**1 · Signals.** Labels come from data 1.x downloaded on every run and never read:
 
 | Label | From |
 |---|---|
@@ -68,7 +71,8 @@ slider cannot express. **There are no bias sliders in the UI**; there is nothing
 
 **4 · List construction.** Maximal Marginal Relevance for genuine variety
 (`λ·score − (1−λ)·maxSimilarityToAlreadyPicked`), plus calibration toward the user's own
-genre mix.
+genre mix. 1.x added `random.uniform(0, diversity)` to every score, which is noise, not
+diversity.
 
 **5 · Explanation.** Scoring against individual liked items (rather than one averaged
 "vibe vector") means the plugin knows *which* item drove each match — so it can say
@@ -78,9 +82,8 @@ genre mix.
 
 ## Before you install
 
-**This is alpha software.** It compiles, the algorithm passes its tests, but it has never
-been loaded into a running Jellyfin server. There will be bugs. Back up your Jellyfin
-`config` directory, or — better — test on a throwaway instance.
+**Back up first.** This is a beta that has not yet run against a live server. Snapshot your
+Jellyfin `config` directory, or test on a non-production instance.
 
 What it will do on your server:
 
@@ -113,31 +116,33 @@ There are three teardown paths because Jellyfin cannot guarantee any single one 
 
 **The reliable one:** config page → **Remove all JellyDiscover libraries**. This revokes
 the user permissions, removes the virtual folders, and deletes the generated content — in
-that order, so no user policy is ever left pointing at a deleted library. Do this
-**before** uninstalling.
+that order, so no user policy is ever left pointing at a deleted library (which is what
+produced "ghost items" in 1.x). Do this **before** uninstalling.
 
 Also available: disabling a media type removes just those libraries; the `OnUninstalling`
 hook attempts a full teardown as a safety net. Every path is idempotent — if one dies
 half-way, running it again finishes the job.
 
-### Removing libraries left by a previous version
+### Removing libraries left by JellyDiscover 1.x
 
 Config page → **Preview what would be removed**. Nothing is deleted until you confirm.
 
-Matching uses the exact invisible-character naming scheme from the old version (`U+3164`
-prefix, one or more `U+200B` suffixes) — **never** broad keywords like "Discover" or
-"Recommended", so your hand-made libraries are safe. The matching predicate is covered by
-tests.
+Matching is on the exact invisible-character naming scheme 1.x generated (`U+3164` prefix,
+one or more `U+200B` suffixes) — **never** on words like "Discover" or "Recommended". That
+keyword match is precisely what made the old cleaner destroy hand-made libraries such as
+"Recommended Classics", and the predicate is covered by tests that assert it does not match
+any of them.
 
-Old content folders on disk are deliberately left alone. The preview shows their paths so
-you can remove them yourself.
+Old *content folders* are deliberately left on disk. They live outside this plugin's data
+root and a stray recursive delete there is the exact failure this rewrite exists to prevent.
+The preview shows their paths so you can remove them yourself.
 
 ---
 
 ## Building
 
 ```bash
-dotnet test          # 50 tests, no Jellyfin required, ~1s
+dotnet test          # 58 tests, no Jellyfin required, ~1s
 dotnet build -c Release
 ```
 
@@ -158,18 +163,56 @@ probably belongs in the plugin project.
 
 ---
 
+## Integrations
+
+**Trakt** — global trending, plus each user's watchlist. Optionally excludes anything they
+already watched on another platform, as an outright exclusion rather than a magic negative
+score. Per-user Trakt accounts are set in the Users section of the config page; profiles
+must be public.
+
+**Jellyseerr / Overseerr** — requested media is boosted. A request is the closest thing to a
+user telling you outright that they want something.
+
+**Email digests** — opt-in per user, at most one a day, every interpolated value HTML-escaped.
+Needs SMTP settings and a public server URL so links resolve off the LAN.
+
+All three are best-effort and time-boxed: a third-party outage degrades the recommendations
+slightly and is recorded as a structured event, but never stalls or fails a refresh.
+
+---
+
 ## Not yet implemented
 
-- **Semantic embeddings.** The design targets ONNX Runtime with `all-MiniLM-L6-v2` behind
-  an interface, with BM25 as the default. Native library loading inside a per-plugin
+- **Semantic embeddings.** The design targets ONNX Runtime with a small sentence-transformer
+  behind an interface, with BM25 as the default. Native library loading inside a per-plugin
   `AssemblyLoadContext` is a known failure mode and needs a spike before it ships. BM25 with
   a library-derived vocabulary is the v1 default and needs no native dependency at all.
-- **Collaborative filtering.** Co-occurrence needs density; a four-person household
-  generates almost none. Planned as a bonus term that activates once a server has enough
-  users, not as a pillar.
-- Trakt and Jellyseerr integration (the feature slots exist in the ranker).
-- Email digests.
+  See [Notes on embeddings](#notes-on-embeddings).
+
+---
+
+## Notes on embeddings
+
+Nothing in this build embeds anything — similarity is BM25 over terms learned from your
+library. If that changes, two things matter more than picking a bigger model:
+
+**Pin the revision, not the name.** These models have no version numbers. Pin the Hugging
+Face revision hash and store it alongside every cached vector, invalidating on change.
+Embeddings from different revisions are not comparable, and a silently mixed cache degrades
+results in a way that is very hard to notice.
+
+**Bigger is probably the wrong axis.** The documents here are short and keyword-dense —
+title, genres, tags, cast, a two-sentence overview. Retrieval leaderboards are dominated by
+long-passage tasks, so their ranking does not transfer cleanly. This is also *symmetric*
+item-to-item similarity, not asymmetric query-to-document retrieval, which is what most
+modern embedding models are tuned for.
+
+If a change is made, the useful directions are: a model of the same size trained for
+sentence similarity rather than retrieval; a multilingual model if the library has
+non-English metadata (common on a media server); and int8 quantisation, which is roughly
+4x smaller and 2-3x faster for about a point of quality — worth taking on a box that is
+also transcoding.
 
 ## Licence
 
-MIT. Jellyfin plugins must be GPLv3 or permissive; MIT satisfies that.
+MIT, as with 1.x. Jellyfin plugins must be GPLv3 or permissive; MIT satisfies that.

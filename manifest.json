@@ -8,11 +8,11 @@
     "category": "General",
     "versions": [
       {
-        "version": "2.0.0.0",
-        "changelog": "First public beta of the plugin rewrite. Complete ground-up rewrite from Python standalone to native Jellyfin plugin.",
+        "version": "2.1.0.0",
+        "changelog": "Adds collaborative filtering, Trakt, Jellyseerr and email digests.",
         "targetAbi": "10.11.5.0",
-        "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.0.0-beta/jellydiscover_2.0.0.0.zip",
-        "checksum": "f47b290f0e2dbe81672115cf48a3dc38",
+        "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.1.0-beta/jellydiscover_2.1.0.0.zip",
+        "checksum": "0ec30550e845eb2d57842c300807d3fa",
         "timestamp": "2026-08-25T00:00:00Z"
       }
     ]

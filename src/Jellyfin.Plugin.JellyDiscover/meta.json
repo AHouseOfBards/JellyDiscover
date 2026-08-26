@@ -7,7 +7,7 @@
     "owner": "AHouseOfBards",
     "targetAbi": "10.11.5.0",
     "framework": "net9.0",
-    "version": "2.0.0.0",
-    "changelog": "First public beta of the plugin rewrite.",
+    "version": "2.1.0.0",
+    "changelog": "Adds collaborative filtering, Trakt, Jellyseerr and email digests.",
     "timestamp": "2026-08-25T00:00:00Z"
 }

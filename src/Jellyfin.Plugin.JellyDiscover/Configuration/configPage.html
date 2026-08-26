@@ -79,12 +79,90 @@
                     </div>
                 </div>
 
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Trakt</h2>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdTraktEnabled" />
+                        <span>Use Trakt for trending and watchlists</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="jdTraktClientId" label="Trakt Client ID" />
+                        <div class="fieldDescription">
+                            trakt.tv &rarr; Settings &rarr; Your API Apps. Per-user Trakt accounts are
+                            set in the Users section below.
+                        </div>
+                    </div>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdTraktExcludeWatched" />
+                        <span>Hide things the user already watched on another platform</span>
+                    </label>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Jellyseerr</h2>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdSeerrEnabled" />
+                        <span>Boost media that has been requested</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="jdSeerrUrl" label="Jellyseerr URL" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="password" id="jdSeerrKey" label="API key" />
+                    </div>
+                </div>
+
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Email digests</h2>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdEmailEnabled" />
+                        <span>Send digests (users opt in individually below)</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="jdSmtpHost" label="SMTP host" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="jdSmtpPort" label="SMTP port" />
+                    </div>
+                    <label class="checkboxContainer">
+                        <input is="emby-checkbox" type="checkbox" id="jdSmtpSsl" />
+                        <span>Use SSL/TLS</span>
+                    </label>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="jdSmtpUser" label="SMTP username" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="password" id="jdSmtpPass" label="SMTP password" />
+                        <div class="fieldDescription">
+                            Use an app password. This is stored in the Jellyfin plugin configuration
+                            file in plain text, the same as the API keys above.
+                        </div>
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="jdSmtpFrom" label="From address" />
+                    </div>
+                    <div class="inputContainer">
+                        <input is="emby-input" type="text" id="jdPublicUrl" label="Public server URL" />
+                        <div class="fieldDescription">
+                            Needed so links in the email work away from your network.
+                        </div>
+                    </div>
+                </div>
+
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block">
                         <span>Save</span>
                     </button>
                 </div>
             </form>
+
+            <div class="verticalSection">
+                <h2 class="sectionTitle">Users</h2>
+                <p class="fieldDescription">
+                    Link a Trakt account or turn on the email digest for individual users.
+                </p>
+                <div id="jdUsers"></div>
+            </div>
 
             <div class="verticalSection">
                 <h2 class="sectionTitle">Maintenance</h2>
@@ -156,6 +234,21 @@
                         p.querySelector('#jdDebounce').value = config.RefreshDebounceMinutes;
                         p.querySelector('#jdDiversity').value = config.DiversityLambda;
                         p.querySelector('#jdWriteNfo').checked = config.WriteNfoFiles;
+                        p.querySelector('#jdTraktEnabled').checked = config.TraktEnabled;
+                        p.querySelector('#jdTraktClientId').value = config.TraktClientId || '';
+                        p.querySelector('#jdTraktExcludeWatched').checked = config.TraktExcludeWatched;
+                        p.querySelector('#jdSeerrEnabled').checked = config.JellyseerrEnabled;
+                        p.querySelector('#jdSeerrUrl').value = config.JellyseerrUrl || '';
+                        p.querySelector('#jdSeerrKey').value = config.JellyseerrApiKey || '';
+                        p.querySelector('#jdEmailEnabled').checked = config.EmailEnabled;
+                        p.querySelector('#jdSmtpHost').value = config.SmtpHost || '';
+                        p.querySelector('#jdSmtpPort').value = config.SmtpPort;
+                        p.querySelector('#jdSmtpSsl').checked = config.SmtpUseSsl;
+                        p.querySelector('#jdSmtpUser').value = config.SmtpUsername || '';
+                        p.querySelector('#jdSmtpPass').value = config.SmtpPassword || '';
+                        p.querySelector('#jdSmtpFrom').value = config.SmtpFromAddress || '';
+                        p.querySelector('#jdPublicUrl').value = config.PublicServerUrl || '';
+                        loadUsers();
                         Dashboard.hideLoadingMsg();
                     });
                 });
@@ -173,12 +266,70 @@
                     config.RefreshDebounceMinutes = parseInt(p.querySelector('#jdDebounce').value, 10);
                     config.DiversityLambda = parseFloat(p.querySelector('#jdDiversity').value);
                     config.WriteNfoFiles = p.querySelector('#jdWriteNfo').checked;
+                    config.TraktEnabled = p.querySelector('#jdTraktEnabled').checked;
+                    config.TraktClientId = p.querySelector('#jdTraktClientId').value.trim();
+                    config.TraktExcludeWatched = p.querySelector('#jdTraktExcludeWatched').checked;
+                    config.JellyseerrEnabled = p.querySelector('#jdSeerrEnabled').checked;
+                    config.JellyseerrUrl = p.querySelector('#jdSeerrUrl').value.trim();
+                    config.JellyseerrApiKey = p.querySelector('#jdSeerrKey').value.trim();
+                    config.EmailEnabled = p.querySelector('#jdEmailEnabled').checked;
+                    config.SmtpHost = p.querySelector('#jdSmtpHost').value.trim();
+                    config.SmtpPort = parseInt(p.querySelector('#jdSmtpPort').value, 10);
+                    config.SmtpUseSsl = p.querySelector('#jdSmtpSsl').checked;
+                    config.SmtpUsername = p.querySelector('#jdSmtpUser').value.trim();
+                    config.SmtpPassword = p.querySelector('#jdSmtpPass').value;
+                    config.SmtpFromAddress = p.querySelector('#jdSmtpFrom').value.trim();
+                    config.PublicServerUrl = p.querySelector('#jdPublicUrl').value.trim();
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
                 });
                 return false;
             });
+
+            function escapeHtml(value) {
+                var div = document.createElement('div');
+                div.textContent = value == null ? '' : value;
+                return div.innerHTML;
+            }
+
+            function loadUsers() {
+                ApiClient.ajax({ type: 'GET', url: url('Users'), dataType: 'json' })
+                    .then(function (users) {
+                        var host = page().querySelector('#jdUsers');
+                        host.innerHTML = '';
+                        users.forEach(function (u) {
+                            var row = document.createElement('div');
+                            row.className = 'verticalSection';
+                            row.innerHTML =
+                                '<h3>' + escapeHtml(u.Username) + '</h3>' +
+                                '<div class="inputContainer"><input is="emby-input" type="text" ' +
+                                'data-trakt label="Trakt username" /></div>' +
+                                '<label class="checkboxContainer"><input is="emby-checkbox" ' +
+                                'type="checkbox" data-digest /><span>Email digest</span></label>' +
+                                '<div class="inputContainer"><input is="emby-input" type="text" ' +
+                                'data-email label="Email address" /></div>' +
+                                '<button is="emby-button" type="button" class="raised" ' +
+                                'data-save><span>Save user</span></button>';
+                            host.appendChild(row);
+                            row.querySelector('[data-trakt]').value = u.TraktUsername || '';
+                            row.querySelector('[data-digest]').checked = !!u.EmailDigest;
+                            row.querySelector('[data-email]').value = u.EmailOverride || '';
+                            row.querySelector('[data-save]').addEventListener('click', function () {
+                                ApiClient.ajax({
+                                    type: 'POST',
+                                    url: url('Users/' + u.Id),
+                                    contentType: 'application/json',
+                                    data: JSON.stringify({
+                                        TraktUsername: row.querySelector('[data-trakt]').value.trim(),
+                                        EmailDigest: row.querySelector('[data-digest]').checked,
+                                        EmailOverride: row.querySelector('[data-email]').value.trim()
+                                    })
+                                }).then(function () { Dashboard.alert('Saved ' + u.Username); });
+                            });
+                        });
+                    });
+            }
 
             document.querySelector('#jdRun').addEventListener('click', function () {
                 ApiClient.ajax({ type: 'POST', url: url('Run') }).then(function () {

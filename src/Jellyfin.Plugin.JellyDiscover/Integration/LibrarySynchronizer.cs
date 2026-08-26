@@ -1,6 +1,7 @@
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Plugin.JellyDiscover.Configuration;
 using Jellyfin.Plugin.JellyDiscover.Data;
+using Jellyfin.Plugin.JellyDiscover.Integration.External;
 using JellyDiscover.Core.Models;
 using JellyDiscover.Core.Pipeline;
 using JellyDiscover.Core.Selection;
@@ -34,6 +35,8 @@ public sealed class LibrarySynchronizer
     private readonly ContentWriter _writer;
     private readonly AccessController _access;
     private readonly DiscoveryStore _store;
+    private readonly ExternalSignalService _external;
+    private readonly DigestMailer _mailer;
     private readonly ILogger<LibrarySynchronizer> _logger;
 
     public LibrarySynchronizer(
@@ -42,6 +45,8 @@ public sealed class LibrarySynchronizer
         ContentWriter writer,
         AccessController access,
         DiscoveryStore store,
+        ExternalSignalService external,
+        DigestMailer mailer,
         ILogger<LibrarySynchronizer> logger)
     {
         _libraryManager = libraryManager;
@@ -49,6 +54,8 @@ public sealed class LibrarySynchronizer
         _writer = writer;
         _access = access;
         _store = store;
+        _external = external;
+        _mailer = mailer;
         _logger = logger;
     }
 
@@ -79,24 +86,34 @@ public sealed class LibrarySynchronizer
     /// </summary>
     public async Task SynchronizeUserAsync(
         User user,
-        IReadOnlyList<BaseItem> rawCatalogue,
-        IReadOnlyList<CatalogItem> catalogue,
-        PluginConfiguration configuration,
+        RefreshContext context,
         CancellationToken cancellationToken)
     {
+        var configuration = context.Configuration;
         var kinds = EnabledKinds(configuration);
         if (kinds.Count == 0 || configuration.Suspended)
         {
             return;
         }
 
-        var history = _reader.ReadHistory(user, rawCatalogue, DateTimeOffset.UtcNow);
+        var history = _reader.ReadHistory(user, context.RawCatalogue, DateTimeOffset.UtcNow);
+
+        var (signals, watchedElsewhere) = await _external
+            .GetForUserAsync(user.Id, configuration, context.Shared, context.ProviderIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Anything they already watched on another platform is excluded outright rather
+        // than scored with a magic negative number.
+        var excluded = new HashSet<string>(_store.GetBlocklist(), StringComparer.Ordinal);
+        excluded.UnionWith(watchedElsewhere);
 
         var result = new Recommender().Recommend(new RecommendationRequest
         {
-            Catalogue = catalogue,
+            Catalogue = context.Catalogue,
             History = history,
-            ExcludedItemIds = _store.GetBlocklist(),
+            ExcludedItemIds = excluded,
+            External = signals,
+            CoOccurrence = context.CoOccurrence,
             ExistingModel = _store.GetModel(user.Id),
             CountPerKind = configuration.RecommendationCount,
             List = new ListOptions
@@ -127,11 +144,14 @@ public sealed class LibrarySynchronizer
                 .ConfigureAwait(false);
         }
 
+        await _mailer.SendDigestAsync(user, result, configuration, cancellationToken).ConfigureAwait(false);
+
         _store.Record(
             "info",
             "generate",
             $"{user.Username}: {result.All.Count} recommendations from {result.CandidatesConsidered} candidates "
-            + $"(catalogue {result.CatalogueSize}, model {(result.ModelWasFitted ? "fitted" : "prior")})");
+            + $"(catalogue {result.CatalogueSize}, model {(result.ModelWasFitted ? "fitted" : "prior")}, "
+            + $"collaborative {(context.CoOccurrence.IsActive ? "on" : "off")})");
     }
 
     private async Task PublishAsync(

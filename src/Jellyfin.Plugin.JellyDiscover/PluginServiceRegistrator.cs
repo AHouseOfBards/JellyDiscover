@@ -1,5 +1,6 @@
 using Jellyfin.Plugin.JellyDiscover.Data;
 using Jellyfin.Plugin.JellyDiscover.Integration;
+using Jellyfin.Plugin.JellyDiscover.Integration.External;
 using Jellyfin.Plugin.JellyDiscover.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
@@ -26,6 +27,10 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<LibrarySynchronizer>();
         serviceCollection.AddSingleton<TeardownService>();
         serviceCollection.AddSingleton<LegacyCleanup>();
+        serviceCollection.AddSingleton<TraktClient>();
+        serviceCollection.AddSingleton<JellyseerrClient>();
+        serviceCollection.AddSingleton<ExternalSignalService>();
+        serviceCollection.AddSingleton<DigestMailer>();
 
         serviceCollection.AddSingleton<RefreshCoordinator>();
         serviceCollection.AddHostedService(p => p.GetRequiredService<RefreshCoordinator>());

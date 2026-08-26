@@ -158,6 +158,53 @@ public sealed class JellyDiscoverController : ControllerBase
         });
     }
 
+    /// <summary>Per-user settings the plugin owns: Trakt account and digest opt-in.</summary>
+    [HttpGet("Users")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<object> GetUsers()
+        => Ok(_userManager.Users.Select(u =>
+        {
+            var prefs = _store.GetUserPreferences(u.Id);
+            return new
+            {
+                Id = u.Id.ToString("N"),
+                u.Username,
+                prefs.TraktUsername,
+                prefs.EmailDigest,
+                prefs.EmailOverride,
+                prefs.LastDigestSent,
+            };
+        }).ToArray());
+
+    [HttpPost("Users/{userId}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult SaveUser(
+        [FromRoute] Guid userId,
+        [FromBody] UserPreferences preferences)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+
+        if (_userManager.GetUserById(userId) is null)
+        {
+            return NotFound();
+        }
+
+        // Preserve the send timestamp: it is bookkeeping, not a user setting, and letting
+        // the form overwrite it would defeat the once-a-day digest limit.
+        var existing = _store.GetUserPreferences(userId);
+        preferences.LastDigestSent = existing.LastDigestSent;
+
+        _store.SaveUserPreferences(userId, preferences);
+        return NoContent();
+    }
+
+    /// <summary>Recent structured run events — what actually happened, not a log grep.</summary>
+    [HttpGet("Events")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<object> GetEvents([FromQuery] int take = 50)
+        => Ok(_store.GetEvents(Math.Clamp(take, 1, 500)));
+
     /// <summary>Re-enables generation after a teardown.</summary>
     [HttpPost("Resume")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

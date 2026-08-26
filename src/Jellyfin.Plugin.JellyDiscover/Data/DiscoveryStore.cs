@@ -43,6 +43,20 @@ internal sealed class StoreState
     public List<RunEvent> Events { get; set; } = [];
 
     public Dictionary<string, string> Blocklist { get; set; } = [];
+
+    public Dictionary<string, UserPreferences> Users { get; set; } = [];
+}
+
+/// <summary>Per-user settings that are not Jellyfin's to hold.</summary>
+public sealed class UserPreferences
+{
+    public string? TraktUsername { get; set; }
+
+    public bool EmailDigest { get; set; }
+
+    public string? EmailOverride { get; set; }
+
+    public string? LastDigestSent { get; set; }
 }
 
 internal sealed class StoredModel
@@ -267,6 +281,28 @@ public sealed class DiscoveryStore
         lock (_gate)
         {
             return _state.Events.AsEnumerable().Reverse().Take(take).ToArray();
+        }
+    }
+
+    public UserPreferences GetUserPreferences(Guid userId)
+    {
+        lock (_gate)
+        {
+            return _state.Users.TryGetValue(userId.ToString("N"), out var prefs)
+                ? prefs
+                : new UserPreferences();
+        }
+    }
+
+    public string? GetTraktUsername(Guid userId) => GetUserPreferences(userId).TraktUsername;
+
+    public void SaveUserPreferences(Guid userId, UserPreferences preferences)
+    {
+        ArgumentNullException.ThrowIfNull(preferences);
+        lock (_gate)
+        {
+            _state.Users[userId.ToString("N")] = preferences;
+            Save();
         }
     }
 

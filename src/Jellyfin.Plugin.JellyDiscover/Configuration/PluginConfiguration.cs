@@ -58,4 +58,48 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>Set by the teardown action so nothing recreates libraries afterwards.</summary>
     public bool Suspended { get; set; }
+
+    // ---- Trakt --------------------------------------------------------------------
+
+    public bool TraktEnabled { get; set; }
+
+    public string TraktClientId { get; set; } = string.Empty;
+
+    /// <summary>Exclude items the user already watched on another platform.</summary>
+    public bool TraktExcludeWatched { get; set; } = true;
+
+    // ---- Jellyseerr ---------------------------------------------------------------
+
+    public bool JellyseerrEnabled { get; set; }
+
+    public string JellyseerrUrl { get; set; } = string.Empty;
+
+    public string JellyseerrApiKey { get; set; } = string.Empty;
+
+    // ---- Email digests ------------------------------------------------------------
+
+    public bool EmailEnabled { get; set; }
+
+    public string SmtpHost { get; set; } = string.Empty;
+
+    public int SmtpPort { get; set; } = 587;
+
+    public bool SmtpUseSsl { get; set; } = true;
+
+    public string SmtpUsername { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Stored as written. Jellyfin's plugin configuration lives in the server's own config
+    /// directory, which is already the trust boundary for the API keys above; 1.x
+    /// "encrypted" this with a key kept in the same folder, which was obfuscation, not
+    /// protection. Use an app password, never a primary account password.
+    /// </summary>
+    public string SmtpPassword { get; set; } = string.Empty;
+
+    public string SmtpFromAddress { get; set; } = string.Empty;
+
+    public string SmtpFromName { get; set; } = "JellyDiscover";
+
+    /// <summary>Public base URL so images and links in the digest resolve outside the LAN.</summary>
+    public string PublicServerUrl { get; set; } = string.Empty;
 }
