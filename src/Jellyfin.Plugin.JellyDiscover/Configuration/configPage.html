@@ -10,6 +10,23 @@
     <div data-role="content">
         <div class="content-primary">
 
+            <div class="verticalSection">
+                <h2 class="sectionTitle">Status</h2>
+                <div id="jdStatusPanel" style="padding:12px 14px;border-radius:6px;
+                     background:rgba(127,127,127,0.08);margin-bottom:12px;">
+                    Checking&hellip;
+                </div>
+                <button is="emby-button" type="button" id="jdRefreshStatus" class="raised">
+                    <span>Refresh status</span>
+                </button>
+                <h3>Recent activity</h3>
+                <div id="jdEvents" style="font-family:monospace;font-size:12px;line-height:1.6;
+                     max-height:320px;overflow:auto;padding:10px 12px;border-radius:6px;
+                     background:rgba(127,127,127,0.08);">
+                    &nbsp;
+                </div>
+            </div>
+
             <form id="jdConfigForm">
                 <div class="verticalSection">
                     <h2 class="sectionTitle">Libraries</h2>
@@ -257,6 +274,7 @@
                         p.querySelector('#jdSmtpFrom').value = config.SmtpFromAddress || '';
                         p.querySelector('#jdPublicUrl').value = config.PublicServerUrl || '';
                         loadUsers();
+                        renderStatus();
                         Dashboard.hideLoadingMsg();
                     });
                 });
@@ -294,6 +312,63 @@
                 });
                 return false;
             });
+
+            function renderStatus() {
+                var panel = page().querySelector('#jdStatusPanel');
+                ApiClient.ajax({ type: 'GET', url: url('Status'), dataType: 'json' })
+                    .then(function (status) {
+                        if (!status.Count) {
+                            panel.innerHTML =
+                                '<b>Plugin loaded, no libraries generated yet.</b><br>' +
+                                'Nothing runs at install time. Enable a media type above, press ' +
+                                'Save, then press <b>Generate now</b> below. Progress appears in ' +
+                                'Dashboard &rarr; Scheduled Tasks.';
+                            return;
+                        }
+                        var rows = status.Libraries.map(function (l) {
+                            return '<tr><td style="padding:2px 12px 2px 0">' + escapeHtml(l.User) +
+                                '</td><td style="padding:2px 12px 2px 0">' + escapeHtml(l.Kind) +
+                                '</td><td style="padding:2px 0;opacity:0.7">' +
+                                escapeHtml(l.ContentPath) + '</td></tr>';
+                        }).join('');
+                        panel.innerHTML =
+                            '<b>' + status.Count + ' discovery ' +
+                            (status.Count === 1 ? 'library' : 'libraries') + '</b>' +
+                            '<table style="margin-top:8px;font-size:13px;">' +
+                            '<tr style="opacity:0.6"><th style="text-align:left;padding-right:12px">User</th>' +
+                            '<th style="text-align:left;padding-right:12px">Type</th>' +
+                            '<th style="text-align:left">Content</th></tr>' + rows + '</table>';
+                    })
+                    .catch(function () {
+                        panel.innerHTML =
+                            '<b>Could not reach the plugin API.</b><br>' +
+                            'The plugin may have failed to load. Check the Jellyfin log for ' +
+                            '"JellyDiscover", and Dashboard &rarr; Scheduled Tasks for ' +
+                            '"Generate discovery libraries".';
+                    });
+
+                var log = page().querySelector('#jdEvents');
+                ApiClient.ajax({ type: 'GET', url: url('Events?take=40'), dataType: 'json' })
+                    .then(function (events) {
+                        if (!events.length) {
+                            log.textContent = 'No activity recorded yet.';
+                            return;
+                        }
+                        log.innerHTML = events.map(function (e) {
+                            var colour = e.Level === 'error' ? '#c2333d'
+                                : e.Level === 'warn' ? '#9c6420' : 'inherit';
+                            return '<div style="color:' + colour + '">' +
+                                escapeHtml((e.Occurred || '').replace('T', ' ').substring(0, 19)) +
+                                '  [' + escapeHtml(e.Stage) + ']  ' +
+                                escapeHtml(e.Message) + '</div>';
+                        }).join('');
+                    })
+                    .catch(function () {
+                        log.textContent = 'Could not read the activity log.';
+                    });
+            }
+
+            document.querySelector('#jdRefreshStatus').addEventListener('click', renderStatus);
 
             function escapeHtml(value) {
                 var div = document.createElement('div');
@@ -341,7 +416,14 @@
 
             document.querySelector('#jdRun').addEventListener('click', function () {
                 ApiClient.ajax({ type: 'POST', url: url('Run') }).then(function () {
-                    Dashboard.alert('Generation started. Watch Scheduled Tasks for progress.');
+                    Dashboard.alert('Generation started. This panel updates as it progresses.');
+                    // Generation is asynchronous, so poll for a while rather than leaving
+                    // the page showing stale state.
+                    var ticks = 0;
+                    var timer = setInterval(function () {
+                        renderStatus();
+                        if (++ticks >= 20) { clearInterval(timer); }
+                    }, 3000);
                 });
             });
 
