@@ -12,7 +12,7 @@
         "changelog": "First public beta of the plugin rewrite. Complete ground-up rewrite from Python standalone to native Jellyfin plugin.",
         "targetAbi": "10.11.5.0",
         "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.0.0-beta/jellydiscover_2.0.0.0.zip",
-        "checksum": "DFF7BBBD789384CBE54914B2ED42C93C",
+        "checksum": "f47b290f0e2dbe81672115cf48a3dc38",
         "timestamp": "2026-08-25T00:00:00Z"
       }
     ]
