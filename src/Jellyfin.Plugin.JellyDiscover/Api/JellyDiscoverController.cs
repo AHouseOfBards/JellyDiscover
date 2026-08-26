@@ -199,6 +199,29 @@ public sealed class JellyDiscoverController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Items that must never be recommended to anyone.</summary>
+    [HttpGet("Blocklist")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult<object> GetBlocklist()
+        => Ok(_store.GetBlocklistWithReasons()
+            .Select(kv => new { ItemId = kv.Key, Reason = kv.Value })
+            .ToArray());
+
+    [HttpPost("Blocklist/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public ActionResult Block([FromRoute] string itemId, [FromQuery] string? reason)
+    {
+        _store.Block(itemId, reason ?? "Blocked by admin");
+        _store.Record("info", "blocklist", $"blocked {itemId}");
+        return NoContent();
+    }
+
+    [HttpDelete("Blocklist/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult Unblock([FromRoute] string itemId)
+        => _store.Unblock(itemId) ? NoContent() : NotFound();
+
     /// <summary>Recent structured run events — what actually happened, not a log grep.</summary>
     [HttpGet("Events")]
     [ProducesResponseType(StatusCodes.Status200OK)]

@@ -115,6 +115,7 @@ public sealed class LibrarySynchronizer
             External = signals,
             CoOccurrence = context.CoOccurrence,
             ExistingModel = _store.GetModel(user.Id),
+            ServerPrior = _store.GetServerPrior(),
             CountPerKind = configuration.RecommendationCount,
             List = new ListOptions
             {

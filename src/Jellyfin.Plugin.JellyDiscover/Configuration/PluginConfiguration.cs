@@ -51,11 +51,6 @@ public class PluginConfiguration : BasePluginConfiguration
     /// matches exactly instead of guessing from a year-less folder name.</summary>
     public bool WriteNfoFiles { get; set; } = true;
 
-    /// <summary>One-time removal of libraries left behind by the Python 1.x releases.</summary>
-    public bool RemoveLegacyLibraries { get; set; } = true;
-
-    public bool LegacyCleanupCompleted { get; set; }
-
     /// <summary>Set by the teardown action so nothing recreates libraries afterwards.</summary>
     public bool Suspended { get; set; }
 

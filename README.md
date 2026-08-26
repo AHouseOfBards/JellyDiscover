@@ -187,31 +187,59 @@ slightly and is recorded as a structured event, but never stalls or fails a refr
   behind an interface, with BM25 as the default. Native library loading inside a per-plugin
   `AssemblyLoadContext` is a known failure mode and needs a spike before it ships. BM25 with
   a library-derived vocabulary is the v1 default and needs no native dependency at all.
-  See [Notes on embeddings](#notes-on-embeddings).
+  The model and packaging decisions are already made — see
+  [Notes on embeddings](#notes-on-embeddings).
 
 ---
 
 ## Notes on embeddings
 
 Nothing in this build embeds anything — similarity is BM25 over terms learned from your
-library. If that changes, two things matter more than picking a bigger model:
+library. When that changes, these decisions are already made.
 
-**Pin the revision, not the name.** These models have no version numbers. Pin the Hugging
-Face revision hash and store it alongside every cached vector, invalidating on change.
-Embeddings from different revisions are not comparable, and a silently mixed cache degrades
-results in a way that is very hard to notice.
+### The model: `paraphrase-multilingual-MiniLM-L12-v2`
 
-**Bigger is probably the wrong axis.** The documents here are short and keyword-dense —
-title, genres, tags, cast, a two-sentence overview. Retrieval leaderboards are dominated by
-long-passage tasks, so their ranking does not transfer cleanly. This is also *symmetric*
-item-to-item similarity, not asymmetric query-to-document retrieval, which is what most
-modern embedding models are tuned for.
+384 dimensions, 12 layers, ~118M parameters, 50+ languages.
 
-If a change is made, the useful directions are: a model of the same size trained for
-sentence similarity rather than retrieval; a multilingual model if the library has
-non-English metadata (common on a media server); and int8 quantisation, which is roughly
-4x smaller and 2-3x faster for about a point of quality — worth taking on a box that is
-also transcoding.
+Not chosen for quality. Chosen because **this plugin is installed by server admins whose
+libraries are not in English.** Anime, foreign-language film, and non-English television are
+ordinary on a Jellyfin server, and an English-only encoder cannot relate those items to
+anything — it fails silently, producing recommendations that quietly ignore a chunk of the
+library. `all-MiniLM-L6-v2` is a fine encoder and about five times smaller; it is the wrong
+choice for software other people install.
+
+Two consequences worth knowing:
+
+- It emits **384 dimensions, the same as the English model**, so the vector cache and index
+  shape are unaffected if we ever swap back.
+- It is **~118M parameters against ~22M**, almost entirely because the multilingual
+  vocabulary is around 250k tokens and the embedding table dominates. That is a much larger
+  file and more resident memory for similar compute — the cost lands on download and RAM,
+  not on encode time.
+
+Whatever ships, **pin the Hugging Face revision hash, not the model name**. These models
+carry no version number. Store the revision beside every cached vector and invalidate on
+change: embeddings from different revisions are not comparable, and a silently mixed cache
+degrades results in a way that is very hard to notice.
+
+### Packaging: weights are data, not code
+
+The model is **not** bundled in the plugin zip. A plugin package is re-downloaded on every
+update, and shipping a few hundred megabytes of weights with every patch release is absurd.
+Weights get fetched on first use into the plugin's data directory, checksum-verified, behind
+a visible scheduled task.
+
+The ONNX Runtime assemblies *are* code and would ship with the plugin — and that is the real
+packaging problem, not the model. ONNX Runtime is a managed wrapper over a **native** binary
+published per-RID (`win-x64`, `linux-x64`, `linux-arm64`, `linux-musl-x64`). Ship one and
+every other platform breaks; ship them all and a 174 KB plugin becomes a very large one.
+
+### None of this happens before the spike
+
+Jellyfin loads each plugin into its own `PluginLoadContext`, and *"unable to load DLL
+'onnxruntime'"* is the classic failure when a native dependency cannot be resolved from that
+context. The gate is half an hour of work: an otherwise-empty plugin that loads ONNX Runtime
+and embeds one sentence. If it fails, none of the above matters and BM25 remains the answer.
 
 ## Licence
 

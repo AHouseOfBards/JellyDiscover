@@ -238,6 +238,45 @@ public sealed class DiscoveryStore
         }
     }
 
+    /// <summary>
+    /// The average of every fitted user model on this server.
+    ///
+    /// Used as the starting point for users with no history of their own. A new account on
+    /// an established server inherits what already works there rather than a hardcoded
+    /// guess, and the moment they watch anything the fit moves them off it.
+    /// </summary>
+    public RankerWeights? GetServerPrior(int minimumModels = 3)
+    {
+        lock (_gate)
+        {
+            var usable = _state.Models.Values
+                .Where(m => m.Version == RankerWeights.CurrentVersion
+                            && m.Values.Length == FeatureNames.Count)
+                .ToArray();
+
+            if (usable.Length < minimumModels)
+            {
+                return null;
+            }
+
+            var averaged = new double[FeatureNames.Count];
+            foreach (var model in usable)
+            {
+                for (var i = 0; i < averaged.Length; i++)
+                {
+                    averaged[i] += model.Values[i];
+                }
+            }
+
+            for (var i = 0; i < averaged.Length; i++)
+            {
+                averaged[i] /= usable.Length;
+            }
+
+            return new RankerWeights { Values = averaged };
+        }
+    }
+
     public void SaveModel(Guid userId, RankerWeights weights)
     {
         ArgumentNullException.ThrowIfNull(weights);
@@ -311,6 +350,38 @@ public sealed class DiscoveryStore
         lock (_gate)
         {
             return _state.Blocklist.Keys.ToHashSet(StringComparer.Ordinal);
+        }
+    }
+
+    public IReadOnlyDictionary<string, string> GetBlocklistWithReasons()
+    {
+        lock (_gate)
+        {
+            return new Dictionary<string, string>(_state.Blocklist, StringComparer.Ordinal);
+        }
+    }
+
+    public void Block(string itemId, string reason)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(itemId);
+        lock (_gate)
+        {
+            _state.Blocklist[itemId] = reason;
+            Save();
+        }
+    }
+
+    public bool Unblock(string itemId)
+    {
+        lock (_gate)
+        {
+            if (!_state.Blocklist.Remove(itemId))
+            {
+                return false;
+            }
+
+            Save();
+            return true;
         }
     }
 

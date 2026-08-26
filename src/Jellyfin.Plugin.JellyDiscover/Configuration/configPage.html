@@ -195,6 +195,14 @@
                     uninstalling</strong> — Jellyfin cannot guarantee a plugin's uninstall hook
                     executes, so this is the reliable path.
                 </p>
+                <label class="checkboxContainer">
+                    <input is="emby-checkbox" type="checkbox" id="jdDropState" />
+                    <span>Also forget stored settings and learned models</span>
+                </label>
+                <div class="fieldDescription">
+                    Leave unticked to keep the registry, so a failed removal can be retried and
+                    your users' learned models survive a reinstall.
+                </div>
                 <button is="emby-button" type="button" id="jdRemoveAll" class="raised block button-delete">
                     <span>Remove all JellyDiscover libraries</span>
                 </button>
@@ -371,7 +379,8 @@
                         Dashboard.showLoadingMsg();
                         ApiClient.ajax({
                             type: 'POST',
-                            url: url('RemoveEverything?dropLocalState=false'),
+                            url: url('RemoveEverything?dropLocalState='
+                                + page().querySelector('#jdDropState').checked),
                             dataType: 'json'
                         }).then(function (result) {
                             Dashboard.hideLoadingMsg();
