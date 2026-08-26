@@ -1,20 +1,28 @@
 [
-  {
-    "guid": "6f1a7c48-2b3d-4a91-9d0e-5c7b8e2f4a11",
-    "name": "JellyDiscover",
-    "description": "Generates a per-user discovery library for Movies, Shows and Music, visible only to that user and refreshed as they watch. Learns each user's weights from their own history, including what they abandoned.",
-    "overview": "Personalised recommendation libraries for every user.",
-    "owner": "AHouseOfBards",
-    "category": "General",
-    "versions": [
-      {
-        "version": "2.1.0.0",
-        "changelog": "Adds collaborative filtering, Trakt, Jellyseerr and email digests.",
-        "targetAbi": "10.11.5.0",
-        "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.1.0-beta/jellydiscover_2.1.0.0.zip",
-        "checksum": "0ec30550e845eb2d57842c300807d3fa",
-        "timestamp": "2026-08-25T00:00:00Z"
-      }
-    ]
-  }
+    {
+        "guid": "6f1a7c48-2b3d-4a91-9d0e-5c7b8e2f4a11",
+        "name": "JellyDiscover",
+        "description": "Generates a per-user discovery library for Movies, Shows and Music, visible only to that user and refreshed as they watch. Learns each user's weights from their own history, including what they abandoned.",
+        "overview": "Personalised recommendation libraries for every user.",
+        "owner": "AHouseOfBards",
+        "category": "General",
+        "versions": [
+            {
+                "version": "2.1.1.0",
+                "changelog": "See the release notes for v2.1.1-beta.",
+                "targetAbi": "10.11.5.0",
+                "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.1.1-beta/jellydiscover_2.1.1.0.zip",
+                "checksum": "89ac11b261ec8d587a3cc5e3180d0de2",
+                "timestamp": "2026-08-26T03:27:38Z"
+            },
+            {
+                "version": "2.1.0.0",
+                "changelog": "Adds collaborative filtering, Trakt, Jellyseerr and email digests.",
+                "targetAbi": "10.11.5.0",
+                "sourceUrl": "https://github.com/AHouseOfBards/JellyDiscover/releases/download/v2.1.0-beta/jellydiscover_2.1.0.0.zip",
+                "checksum": "0ec30550e845eb2d57842c300807d3fa",
+                "timestamp": "2026-08-25T00:00:00Z"
+            }
+        ]
+    }
 ]
